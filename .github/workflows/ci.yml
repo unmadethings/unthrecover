@@ -18,8 +18,8 @@ jobs:
     name: Lint, unit tests, security
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Verify modules
@@ -36,21 +36,42 @@ jobs:
         run: make sec
 
   integration:
-    name: Integration (Docker + PostgreSQL)
+    name: Integration (PostgreSQL ${{ matrix.pg }}, client ${{ matrix.client }})
     runs-on: ubuntu-24.04
     needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { pg: "12", client: "16" }
+          - { pg: "13", client: "16" }
+          - { pg: "14", client: "16" }
+          - { pg: "15", client: "16" }
+          - { pg: "16", client: "16" }
+          - { pg: "17", client: "17" }
+    env:
+      # Source and restore use the same major version, as in production use.
+      UNTH_TEST_SOURCE_IMAGE: postgres:${{ matrix.pg }}-alpine
+      UNTH_TEST_RESTORE_IMAGE: postgres:${{ matrix.pg }}-alpine
+      UNTH_TEST_TINY_FS: /mnt/unth-tiny
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: Install PostgreSQL 16 client tools
+      - name: Install PostgreSQL ${{ matrix.client }} client tools (PGDG)
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q postgresql-client-16
-          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
-      - name: Docker info
-        run: docker info --format '{{.ServerVersion}}'
+          sudo apt-get install -y -q postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -q postgresql-client-${{ matrix.client }}
+          echo "/usr/lib/postgresql/${{ matrix.client }}/bin" >> "$GITHUB_PATH"
+      - name: Tool versions
+        run: pg_dump --version && pg_restore --version && docker info --format 'Docker {{.ServerVersion}}'
+      - name: Tiny tmpfs for the disk-full test
+        run: |
+          sudo mkdir -p "$UNTH_TEST_TINY_FS"
+          sudo mount -t tmpfs -o "size=448k,mode=0700,uid=$(id -u),gid=$(id -g)" tmpfs "$UNTH_TEST_TINY_FS"
       - name: Integration tests
         # UNTH_INTEGRATION_REQUIRED=1 makes missing prerequisites FAIL instead of skip.
         run: make test-integration
@@ -64,10 +85,10 @@ jobs:
     name: Secret scan
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: gitleaks (full history)

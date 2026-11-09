@@ -443,16 +443,21 @@ func TestInsufficientDiskPreflight(t *testing.T) {
 }
 
 // M0-09b: disk actually fills up during the dump → controlled FAIL, partial
-// file removed. Uses a tiny tmpfs; requires mount privileges.
+// file removed. Uses a tiny tmpfs: either a pre-mounted, writable one given in
+// UNTH_TEST_TINY_FS (CI mounts it with sudo), or one mounted here (needs root).
 func TestDiskFullDuringBackup(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "tiny")
-	_ = os.MkdirAll(dir, 0o700)
-	if out, err := exec.Command("mount", "-t", "tmpfs", "-o", "size=448k,mode=0700", "tmpfs", dir).CombinedOutput(); err != nil {
-		t.Skipf("NOT RUN: cannot mount tmpfs (needs root/CAP_SYS_ADMIN): %v %s", err, out)
+	dir := os.Getenv("UNTH_TEST_TINY_FS")
+	if dir == "" {
+		dir = filepath.Join(t.TempDir(), "tiny")
+		_ = os.MkdirAll(dir, 0o700)
+		if out, err := exec.Command("mount", "-t", "tmpfs", "-o", "size=448k,mode=0700", "tmpfs", dir).CombinedOutput(); err != nil {
+			t.Skipf("NOT RUN: cannot mount tmpfs (needs root/CAP_SYS_ADMIN or UNTH_TEST_TINY_FS): %v %s", err, out)
+		}
+		t.Cleanup(func() { _ = exec.Command("umount", dir).Run() })
 	}
-	t.Cleanup(func() { _ = exec.Command("umount", dir).Run() })
 	e := newEnv(t)
-	e.dataDir = filepath.Join(dir, "data")
+	e.dataDir = filepath.Join(dir, "data-"+randHex(4))
+	t.Cleanup(func() { _ = os.RemoveAll(e.dataDir) })
 	v, r := e.backup(e.config(cfgOpts{}))
 	if r.code != 1 || v["error_category"] != "INSUFFICIENT_STORAGE" {
 		t.Fatalf("code=%d v=%v stderr=%s", r.code, v, r.stderr)
@@ -534,11 +539,11 @@ func TestUnsupportedVersionViaOlderTool(t *testing.T) {
 // M0-14b: a real newer PostgreSQL server (17) with pg_dump 16 → controlled
 // failure. Skipped (NOT RUN) if the image cannot be pulled.
 func TestUnsupportedVersionRealServer(t *testing.T) {
-	img := envOr("UNTH_TEST_NEWER_IMAGE", "postgres:17-alpine")
 	tool, err := postgres.LookupTool(context.Background(), "pg_dump")
 	if err != nil {
 		t.Fatal(err)
 	}
+	img := envOr("UNTH_TEST_NEWER_IMAGE", fmt.Sprintf("postgres:%d-alpine", tool.Major+1))
 	if !strings.Contains(img, strconv.Itoa(tool.Major+1)) {
 		t.Skipf("NOT RUN: %s is not newer than local pg_dump %d", img, tool.Major)
 	}
