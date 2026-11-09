@@ -54,9 +54,10 @@ Every resource gets `io.unthrecover.managed=true` and `io.unthrecover.run=<run-i
 filters by both labels **and** re-checks labels client-side before deleting
 (`TestCleanupOnlyRemovesOwnLabeledResources` uses a fake Engine that ignores filters).
 
-## TD-010 Go 1.25 minimum
-`go mod tidy` with the selected `modernc.org/sqlite`/`x/*` versions requires `go 1.25`.
-Local toolchain: 1.24.7 auto-switched to 1.25.0.
+## TD-010 Go 1.26 minimum
+Security fixes for `golang.org/x/crypto` (v0.58.0) require Go 1.26. The first CI run's
+govulncheck found reachable vulnerabilities in pgx 5.7.5 (GO-2026-5004) and x/text 0.27.0
+(GO-2026-6629, GO-2026-5970); upgrading to pgx 5.12.0 / x/text 0.44.0 raised the minimum to 1.26.
 
 ## TD-011 License: Apache-2.0
 All direct and transitive dependencies are MIT, BSD-2/3 or Apache-2.0 (see

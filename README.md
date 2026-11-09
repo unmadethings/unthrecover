@@ -64,7 +64,7 @@ SHA-256, manifest               6 restore              (pg_restore --single-tran
 ## Installation
 
 Requirements: Linux, Docker Engine (socket access), PostgreSQL client tools
-(`pg_dump`, `pg_restore`) whose major version is ≥ your server's. Go 1.25+ to build.
+(`pg_dump`, `pg_restore`) whose major version is ≥ your server's. Go 1.26+ to build.
 
 ```bash
 git clone https://github.com/unmadethings/unthrecover.git

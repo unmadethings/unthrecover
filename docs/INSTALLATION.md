@@ -10,7 +10,7 @@
 sudo apt-get install -y postgresql-client-16
 ```
 
-- Go 1.25+ (only to build from source).
+- Go 1.26+ (only to build from source).
 
 ## From source
 ```bash

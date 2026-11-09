@@ -36,7 +36,7 @@ kontroller geçmeden hiçbir yedek `VERIFIED` olamaz. Checksum tek başına yete
 ## Kurulum
 
 Gereksinimler: Linux, Docker Engine, sunucu sürümünüze eşit veya daha yeni PostgreSQL
-istemci araçları (`pg_dump`, `pg_restore`), derlemek için Go 1.25+.
+istemci araçları (`pg_dump`, `pg_restore`), derlemek için Go 1.26+.
 
 ```bash
 git clone https://github.com/unmadethings/unthrecover.git

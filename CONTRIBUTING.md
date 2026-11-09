@@ -12,7 +12,7 @@ Thank you for helping make recoveries provable. Please read the
 5. Don't claim support for a feature that isn't implemented and tested.
 
 ## Development setup
-Requirements: Go 1.25+, Docker, PostgreSQL 16 client tools, Linux.
+Requirements: Go 1.26+, Docker, PostgreSQL 16 client tools, Linux.
 
 ```bash
 make check

@@ -16,7 +16,7 @@
 | Corrupted / non-restorable backups never VERIFIED | ✅ unit + integration tests |
 | No secrets in logs/files | ✅ integration test |
 | CI run on GitHub | ⬜ not yet executed (repository has no `main` branch yet) |
-| govulncheck | ⬜ NOT RUN locally (network blocked); must pass in CI |
+| govulncheck | 🟡 first CI run found 3 vulns; fixed, CI re-run pending |
 | Release artifacts + checksums | ⬜ |
 | Repository public-readiness review (secrets, history, licenses) | ✅ gitleaks + license audit on the branch |
 
