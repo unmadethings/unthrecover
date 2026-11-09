@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -64,11 +65,16 @@ func TestLargeDatabase(t *testing.T) {
 		t.Fatalf("report must state that the large table's content was not hashed: %v", rep.Scope.NotCovered)
 	}
 	fi, _ := os.Stat(e.artifactPath(id))
-	var restoreMS int64
-	rj := e.run("report", id, "--format", "json")
-	if i := strings.Index(rj.stdout, `"observed_test_restore_duration_ms": `); i >= 0 {
-		fmt.Sscanf(rj.stdout[i+len(`"observed_test_restore_duration_ms": `):], "%d", &restoreMS)
+	var stored struct {
+		Objectives struct {
+			RestoreMS int64 `json:"observed_test_restore_duration_ms"`
+		} `json:"recovery_objectives"`
 	}
+	rj := e.run("report", id, "--format", "json")
+	if err := json.Unmarshal([]byte(rj.stdout), &stored); err != nil || stored.Objectives.RestoreMS <= 0 {
+		t.Fatalf("report restore duration missing: %v %s", err, rj.stdout[:min(len(rj.stdout), 300)])
+	}
+	restoreMS := stored.Objectives.RestoreMS
 	t.Logf("LARGE-DB RESULT rows=%d db_size=%s artifact=%.1fMiB backup=%s verify_total=%s restore=%s",
 		rows, size, float64(fi.Size())/(1<<20), backupDur.Round(time.Second), verifyDur.Round(time.Second),
 		(time.Duration(restoreMS) * time.Millisecond).Round(time.Second))
