@@ -53,8 +53,9 @@ match → checksum PASS but run FAILED; plus `Decide()` unit tests).
 | License review | **PASS** | all deps MIT/BSD/Apache-2.0 |
 | govulncheck | **PASS** (CI run #3) | Blocked locally (HTTP 403). CI runs #1–#2 found vulnerabilities in pgx 5.7.5, x/text 0.27.0 and the Go 1.26.0 stdlib; fixed by upgrades and `toolchain go1.26.10` |
 | GitHub Actions CI | **PASS** (run #3, commit 38b2b3f) | lint, race unit tests, build, govulncheck, gosec, gitleaks (full history), integration 20 PASS / 1 SKIP, leftover-resource check — https://github.com/unmadethings/unthrecover/actions/runs/42689780838 |
-| Disk-full test in CI | **NOT RUN** on GitHub runners (confirmed, run #3) | `mount: must be superuser`; skipped with reason. PASS locally as root |
-| PostgreSQL 12–15 sources | **NOT RUN** | not in matrix yet (M1) |
+| Disk-full test in CI | **PASS** (from run #6) | CI pre-mounts a 448 KiB tmpfs with sudo (`UNTH_TEST_TINY_FS`); before that it was NOT RUN on runners |
+| PostgreSQL version matrix | **PASS** | 12, 13, 14, 15, 16 (pg_dump 16) and 17 (pg_dump 17): full integration suite each, CI run #7 — https://github.com/unmadethings/unthrecover/actions/runs/42697171050. PG 12 first failed on a test-fixture type error (fixed) |
+| Large database (opt-in, `UNTH_TEST_LARGE_ROWS=5000000`) | **PASS** (local) | 5M rows, 1,526 MB → artifact 158.5 MiB; backup 16 s; verify 32 s total, of which restore 26 s; report states the 5M-row table was row-counted, not content-hashed |
 | macOS / Docker Desktop | **NOT RUN** | unsupported in M0 |
 
 ## Defects found and fixed during testing
@@ -64,3 +65,5 @@ match → checksum PASS but run FAILED; plus `Decide()` unit tests).
 4. Interrupt test initially signalled during `pg_restore --list`, not the restore; harness fixed to target the real restore.
 5. Vulnerable dependencies (pgx SQL-injection placeholder confusion, x/text DoS) found by govulncheck in CI; upgraded (minimum Go is now 1.26).
 6. CI run #2: Go 1.26.0 standard-library vulnerabilities (fixed in 1.26.1+); `toolchain go1.26.10` pinned in go.mod.
+7. PostgreSQL 12 rejected an implicit numeric→bigint return in a test-fixture SQL function (fixture fixed with an explicit cast).
+8. Large-DB test logged a 0 s restore time because it searched compact JSON for a key with a trailing space; now decodes the report.

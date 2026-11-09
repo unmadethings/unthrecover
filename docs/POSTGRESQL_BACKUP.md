@@ -12,9 +12,9 @@ if you need roles. Logical backups restore to the snapshot moment — no point-i
 ## Version compatibility
 - Source server ≥ 12 (`MinServerMajor`).
 - Local `pg_dump` major must be ≥ source major; otherwise the backup fails up-front with
-  `UNSUPPORTED_VERSION` (tested with a real PostgreSQL 17 server and pg_dump 16).
-- Tested: PostgreSQL 16.15 (source and restore). Other versions in range are expected to work
-  but are not yet in the CI matrix.
+  `UNSUPPORTED_VERSION` (tested with real servers: PostgreSQL 17 vs pg_dump 16, 18 vs pg_dump 17).
+- Tested in CI with source and restore on the same major: PostgreSQL 12, 13, 14, 15 and 16
+  (pg_dump 16) and 17 (pg_dump 17); full integration suite per version.
 - Restore image defaults to `postgres:<source major>`.
 
 ## Recommended backup role

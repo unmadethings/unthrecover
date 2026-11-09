@@ -96,7 +96,7 @@ All commands: [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md).
 
 ## What is supported (M0)
 
-- PostgreSQL 12 – (your `pg_dump` major) logical backups; **tested with PostgreSQL 16**
+- PostgreSQL 12 – (your `pg_dump` major) logical backups; **tested in CI with PostgreSQL 12, 13, 14, 15, 16 and 17**
 - Local repository (`--data-dir`, default `~/.local/share/unthrecover`)
 - SQLite metadata with versioned migrations; audit trail (`unth audit list`)
 - Isolated restore testing in Docker; JSON and text reports

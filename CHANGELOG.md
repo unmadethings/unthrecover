@@ -19,7 +19,7 @@ versioning: [SemVer](https://semver.org/).
 - Unit tests, Docker integration suite covering the 14 M0 acceptance scenarios, CI and release workflows.
 
 ### Known limitations
-- Linux only; tested with PostgreSQL 16 and Docker Engine 29.
+- Linux only; tested with PostgreSQL 12–17 (CI matrix) and Docker Engine 28/29.
 - No encryption, no signatures, no remote storage, no scheduling/retention.
 - Roles/ownership/privileges are not verified.
 - Not production-ready.

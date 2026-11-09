@@ -23,10 +23,10 @@ All licenses are permissive and compatible with Apache-2.0. `go mod verify` runs
 
 | Component | Tested version | Requirement |
 |---|---|---|
-| PostgreSQL client tools (`pg_dump`, `pg_restore`) | 16.15 | major ≥ source server major |
-| PostgreSQL server (source) | 16.15 (alpine), 17 → controlled failure | 12 … pg_dump major |
-| Restore image | `postgres:16`, `postgres:16-alpine` | must run the official entrypoint |
-| Docker Engine | 29.9.2 (API 1.56) | API ≥ 1.40 and unix socket |
+| PostgreSQL client tools (`pg_dump`, `pg_restore`) | 16.15 (local), 16.x and 17.11 (CI) | major ≥ source server major |
+| PostgreSQL server (source) | 12, 13, 14, 15, 16 with pg_dump 16; 17 with pg_dump 17 (CI matrix, alpine images); server newer than pg_dump → controlled failure (tested 17 vs 16, 18 vs 17) | 12 … pg_dump major |
+| Restore image | `postgres:<12–17>-alpine` (CI), `postgres:16` (manual) | must run the official entrypoint |
+| Docker Engine | 29.9.2 (local), 28.0.4 (CI) | API ≥ 1.40 and unix socket |
 | Linux kernel | 6.18 (CI: ubuntu-24.04) | |
 
 ## Vulnerability scanning

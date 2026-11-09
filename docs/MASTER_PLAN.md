@@ -21,8 +21,8 @@ Status legend: ✅ done and tested · 🟡 partial · ⬜ not started. Updated w
 
 ## M1 — Self-hosted Community Edition
 Docker volume backup with consistency policies (stop / quiesce hooks / refuse for databases),
-retention, scheduling (systemd timer / built-in), install packages, better error recovery,
-CI matrix for PostgreSQL 12–17.
+retention, scheduling (systemd timer / built-in), install packages, better error recovery.
+(CI matrix for PostgreSQL 12–17: ✅ done during M0 hardening.)
 
 ## M2 — Web management panel
 React + TypeScript + Vite; Overview, Infrastructure, Workloads, Backups, Recovery Tests,

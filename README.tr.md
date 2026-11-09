@@ -66,7 +66,7 @@ Komut referansı (İngilizce): [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)
 
 ## Desteklenenler (M0)
 
-- PostgreSQL 12 – (`pg_dump` ana sürümünüz) mantıksal yedek; **PostgreSQL 16 ile test edildi**
+- PostgreSQL 12 – (`pg_dump` ana sürümünüz) mantıksal yedek; **CI'da PostgreSQL 12, 13, 14, 15, 16 ve 17 ile test edildi**
 - Yerel depo (`--data-dir`), SQLite metadata, versiyonlu migration, denetim kaydı
 - Docker'da izole restore testi, JSON ve metin raporları
 - Docker ve PostgreSQL için salt-okunur keşif
