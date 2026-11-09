@@ -12,11 +12,11 @@
 ## `v0.1.0-alpha` — PostgreSQL recovery proof
 | Criterion | Status (2026-11-09) |
 |---|---|
-| All 14 M0 acceptance scenarios pass in real integration tests | ✅ locally (sandbox) |
+| All 14 M0 acceptance scenarios pass in real integration tests | ✅ locally; ✅ CI (disk-full ENOSPC case NOT RUN on runners, pre-flight case PASS) |
 | Corrupted / non-restorable backups never VERIFIED | ✅ unit + integration tests |
 | No secrets in logs/files | ✅ integration test |
-| CI run on GitHub | ⬜ not yet executed (repository has no `main` branch yet) |
-| govulncheck | 🟡 first CI run found 3 vulns; fixed, CI re-run pending |
+| CI run on GitHub | ✅ run #3 green (38b2b3f) |
+| govulncheck | ✅ clean in CI run #3 |
 | Release artifacts + checksums | ⬜ |
 | Repository public-readiness review (secrets, history, licenses) | ✅ gitleaks + license audit on the branch |
 

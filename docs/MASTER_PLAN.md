@@ -15,9 +15,9 @@ Status legend: ✅ done and tested · 🟡 partial · ⬜ not started. Updated w
 | JSON/text reports | scope, RTO/RPO caveats | ✅ |
 | Interrupted-operation recovery | `unth cleanup` after SIGKILL | ✅ |
 | M0 acceptance tests (14 scenarios) | real Docker integration tests | ✅ 14/14 (see TEST_RESULTS) |
-| CI workflow | lint, race, gosec, govulncheck, integration, gitleaks | 🟡 written; not yet run on GitHub |
+| CI workflow | lint, race, gosec, govulncheck, integration, gitleaks | ✅ green on GitHub (run #3) |
 | Docs EN + TR | consistent with CLI | ✅ (TR: README + quickstart) |
-| `v0.1.0-alpha` release | see RELEASE_CRITERIA | ⬜ blocked on CI run + `main` branch |
+| `v0.1.0-alpha` release | see RELEASE_CRITERIA | ⬜ ready to tag (awaiting maintainer decision) |
 
 ## M1 — Self-hosted Community Edition
 Docker volume backup with consistency policies (stop / quiesce hooks / refuse for databases),

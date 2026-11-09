@@ -51,9 +51,9 @@ match → checksum PASS but run FAILED; plus `Decide()` unit tests).
 | gosec | **PASS** | 0 findings after triage (G304/G302 annotated with justification, G104 fixed) |
 | gitleaks (working tree) | **PASS** | "no leaks found" |
 | License review | **PASS** | all deps MIT/BSD/Apache-2.0 |
-| govulncheck | **FAIL → fixed** | Blocked locally (HTTP 403). First CI run found GO-2026-5004 (pgx 5.7.5), GO-2026-6629 and GO-2026-5970 (x/text 0.27.0); upgraded to pgx 5.12.0 / x/text 0.44.0; re-verification in CI pending |
-| GitHub Actions CI | **run #1: FAIL** (govulncheck) | secret scan, lint, unit tests, build passed; integration skipped because the job failed earlier; re-run after fix pending |
-| Disk-full test in CI | expected **NOT RUN** on GitHub runners | needs mount privileges; skipped with reason |
+| govulncheck | **PASS** (CI run #3) | Blocked locally (HTTP 403). CI runs #1–#2 found vulnerabilities in pgx 5.7.5, x/text 0.27.0 and the Go 1.26.0 stdlib; fixed by upgrades and `toolchain go1.26.10` |
+| GitHub Actions CI | **PASS** (run #3, commit 38b2b3f) | lint, race unit tests, build, govulncheck, gosec, gitleaks (full history), integration 20 PASS / 1 SKIP, leftover-resource check — https://github.com/unmadethings/unthrecover/actions/runs/42689780838 |
+| Disk-full test in CI | **NOT RUN** on GitHub runners (confirmed, run #3) | `mount: must be superuser`; skipped with reason. PASS locally as root |
 | PostgreSQL 12–15 sources | **NOT RUN** | not in matrix yet (M1) |
 | macOS / Docker Desktop | **NOT RUN** | unsupported in M0 |
 
