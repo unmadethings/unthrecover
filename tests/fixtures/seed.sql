@@ -75,7 +75,7 @@ CREATE TRIGGER orders_audit AFTER INSERT OR UPDATE ON orders
     FOR EACH ROW EXECUTE FUNCTION log_order_change();
 
 CREATE FUNCTION customer_lifetime_value(cid bigint) RETURNS bigint LANGUAGE sql STABLE AS $$
-    SELECT COALESCE(sum(total_cents), 0) FROM orders WHERE customer_id = cid AND status <> 'cancelled'
+    SELECT COALESCE(sum(total_cents), 0)::bigint FROM orders WHERE customer_id = cid AND status <> 'cancelled'
 $$;
 
 -- Deterministic synthetic data (no random()).
