@@ -1,11 +1,21 @@
 name: Release
 
-# Builds release artifacts for a pushed tag and creates a DRAFT GitHub
-# release. A maintainer reviews the draft (notes, known limitations,
-# test evidence) and publishes it manually.
+# Builds release artifacts and creates a DRAFT GitHub pre-release.
+# Two ways to start it:
+#   1. push a tag "v*"                                   (tag already exists)
+#   2. "Run workflow" (workflow_dispatch) with a version  (GitHub creates the
+#      tag on the tested commit when the draft release is created)
+# A maintainer reviews the draft (notes, known limitations, test evidence)
+# and publishes it manually.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to create, e.g. v0.1.0-alpha"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,10 +25,23 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
     steps:
+      - name: Validate version
+        run: |
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "invalid version: $VERSION"; exit 1
+          fi
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Refuse an existing tag on manual runs
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null; then
+            echo "tag $VERSION already exists"; exit 1
+          fi
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -29,12 +52,27 @@ jobs:
           echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
       - name: Full test suite
         run: make check test-integration
+      - name: Vulnerability scan
+        run: make vuln
       - name: Build artifacts and checksums
-        run: make dist VERSION=${GITHUB_REF_NAME}
-      - name: Create draft release
+        run: make dist VERSION="$VERSION"
+      - name: Create draft pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* --draft --prerelease \
-            --title "Unth Recover $GITHUB_REF_NAME" \
-            --notes "Draft. See CHANGELOG.md and docs/RELEASE_CRITERIA.md. Pre-release software: not production-ready."
+          gh release create "$VERSION" dist/* --draft --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Unth Recover $VERSION" \
+            --notes-file - <<'EOF'
+          **Pre-release — not production-ready.**
+
+          M0: PostgreSQL recovery proof. Backs up a PostgreSQL database and proves it can be
+          recovered by restoring it into a fresh isolated container and comparing data, schema
+          and constraints with the source snapshot.
+
+          - Changes: see CHANGELOG.md
+          - Test evidence: docs/TEST_RESULTS.md
+          - Known limitations: Linux only; tested with PostgreSQL 16; backups are not encrypted;
+            checksums are not signatures; roles/privileges are not verified.
+          - Verify downloads: `sha256sum -c SHA256SUMS --ignore-missing`
+          EOF
