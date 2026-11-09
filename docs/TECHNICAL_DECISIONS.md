@@ -58,6 +58,9 @@ filters by both labels **and** re-checks labels client-side before deleting
 Security fixes for `golang.org/x/crypto` (v0.58.0) require Go 1.26. The first CI run's
 govulncheck found reachable vulnerabilities in pgx 5.7.5 (GO-2026-5004) and x/text 0.27.0
 (GO-2026-6629, GO-2026-5970); upgrading to pgx 5.12.0 / x/text 0.44.0 raised the minimum to 1.26.
+`go.mod` pins `toolchain go1.26.10`: CI run #2 showed that `go 1.26.0` alone makes setup-go install
+Go 1.26.0, whose standard library has 28 reachable vulnerabilities fixed in later patch releases.
+Keep the toolchain line on the latest patch release.
 
 ## TD-011 License: Apache-2.0
 All direct and transitive dependencies are MIT, BSD-2/3 or Apache-2.0 (see

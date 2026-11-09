@@ -2,6 +2,8 @@ module github.com/unmadethings/unthrecover
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/spf13/cobra v1.8.1

@@ -1,6 +1,6 @@
 # Test results — M0
 
-Run date: 2026-11-09. Environment: Linux 6.18 x86_64 (ephemeral cloud dev container), Go 1.26.0,
+Run date: 2026-11-09. Environment: Linux 6.18 x86_64 (ephemeral cloud dev container), Go 1.26.10,
 Docker Engine 29.9.2 (API 1.56, started inside the container for this run), pg_dump/pg_restore 16.15,
 source images `postgres:16-alpine` (16.15) and `postgres:17-alpine`, restore images
 `postgres:16-alpine` (suite) and `postgres:16` (manual run).
@@ -63,3 +63,4 @@ match → checksum PASS but run FAILED; plus `Decide()` unit tests).
 3. Sequence values compared for equality — false failure under concurrent writes; now monotonic (integration test).
 4. Interrupt test initially signalled during `pg_restore --list`, not the restore; harness fixed to target the real restore.
 5. Vulnerable dependencies (pgx SQL-injection placeholder confusion, x/text DoS) found by govulncheck in CI; upgraded (minimum Go is now 1.26).
+6. CI run #2: Go 1.26.0 standard-library vulnerabilities (fixed in 1.26.1+); `toolchain go1.26.10` pinned in go.mod.
