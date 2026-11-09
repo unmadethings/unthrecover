@@ -1,0 +1,39 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security issues must NOT be reported here.** See SECURITY.md.
+        Never paste passwords, connection strings with credentials, or backup contents.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include the command you ran and the output (redact host names if needed).
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `unth doctor` and `unth version`
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: pg
+    attributes:
+      label: Source PostgreSQL version
+  - type: textarea
+    id: report
+    attributes:
+      label: Verification report (if relevant)
+      description: "`unth report <backup-id> --format json` — review it before posting."
+      render: json

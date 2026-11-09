@@ -1,0 +1,7 @@
+Unth Recover
+Copyright 2026 Unmade Things
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It includes third-party Go modules under permissive licenses (Apache-2.0, MIT,
+BSD-3-Clause); see docs/DEPENDENCY_MATRIX.md for the list.

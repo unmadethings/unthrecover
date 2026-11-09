@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, unit tests, security
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Verify modules
+        run: go mod verify
+      - name: Lint (vet, gofmt, staticcheck)
+        run: make lint
+      - name: Unit tests (race)
+        run: make test-race
+      - name: Build
+        run: make build && ./bin/unth version
+      - name: govulncheck
+        run: make vuln
+      - name: gosec
+        run: make sec
+
+  integration:
+    name: Integration (Docker + PostgreSQL)
+    runs-on: ubuntu-24.04
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install PostgreSQL 16 client tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+      - name: Docker info
+        run: docker info --format '{{.ServerVersion}}'
+      - name: Integration tests
+        # UNTH_INTEGRATION_REQUIRED=1 makes missing prerequisites FAIL instead of skip.
+        run: make test-integration
+      - name: Leftover resource check
+        if: always()
+        run: |
+          left=$(docker ps -aq --filter label=io.unthrecover.managed=true; docker volume ls -q --filter label=io.unthrecover.managed=true; docker network ls -q --filter label=io.unthrecover.managed=true)
+          if [ -n "$left" ]; then echo "Leftover resources: $left"; exit 1; fi
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gitleaks (full history)
+        run: go run github.com/zricethezav/gitleaks/v8@v8.21.2 git --no-banner --redact .

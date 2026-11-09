@@ -1,0 +1,12 @@
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+# local data directories and backups must never be committed
+/unth-data/
+*.dump
+metadata.db*
+*.pass
+.env
+.env.*

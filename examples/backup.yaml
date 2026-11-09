@@ -1,0 +1,36 @@
+# Unth Recover job configuration (example).
+# Secrets are NEVER written here: use password_env or password_file (chmod 600).
+version: 1
+
+source:
+  name: shop-db              # workload identifier shown in reports
+  type: postgres
+  host: 127.0.0.1
+  port: 5432
+  database: shop
+  user: backup_reader
+  password_env: SHOP_DB_PASSWORD
+  # password_file: /etc/unth/shop-db.pass
+  sslmode: prefer            # disable|allow|prefer|require|verify-ca|verify-full
+  connect_timeout: 10s
+
+backup:
+  timeout: 1h
+  min_free_bytes: 268435456  # refuse to start with less than 256 MiB free
+
+verification:
+  # restore_image: postgres:16   # default: postgres:<source major version>
+  image_pull: if-missing         # if-missing|always|never
+  timeout: 30m
+  memory_mb: 1024
+  cpus: 1.0
+  pids_limit: 512
+  table_hash_max_rows: 100000    # tables up to this size get a full content hash
+  # Application-specific, read-only assertions. Each query runs against the
+  # source inside the backup snapshot and against the restored copy; results
+  # must be identical. Do not end queries with a semicolon.
+  queries:
+    - name: paid_order_total
+      sql: SELECT sum(total_cents) FROM orders WHERE status = 'paid'
+    - name: customers_without_orders
+      sql: SELECT count(*) FROM customers c WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)
