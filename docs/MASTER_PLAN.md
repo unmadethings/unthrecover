@@ -39,8 +39,19 @@ Workloads, Backups & recovery tests (visual pipeline), reports with suggested fi
 Activity log, Settings; light/dark themes. Remaining: policies/settings editing in the UI, RBAC (M4).
 User interviews (docs/research/KULLANICI_GORUSMELERI.md) decide the next UI investments.
 
-## M3 — Storage & integrations
-S3-compatible storage (MinIO etc.), encryption, signed manifests, Coolify & Dokploy integrations.
+## M3 — Storage & integrations (core done for v0.3.0-beta)
+
+| Work package | Status |
+|---|---|
+| S3-compatible offsite storage (AWS, Google Cloud Storage, R2, B2, MinIO, …) | ✅ unit + integration tests (SeaweedFS S3) |
+| Cloud drives via rclone (Google Drive, OneDrive, Dropbox, SFTP, …) | ✅ tests through the real rclone binary |
+| Encryption of offsite copies (age X25519, streaming) | ✅ tamper/wrong-key tests |
+| Signed copy descriptors (Ed25519) | ✅ |
+| Remote proof after every upload; offsite retention; disaster-recovery fetch | ✅ fetch on an empty machine + isolated restore VERIFIED |
+| Coolify / Dokploy / Compose discovery (`unth discover jobs`) | ✅ Coolify-style integration test |
+| `.rpm`, Compose file, `unth schedule` | ✅ |
+| Real-provider tests (GCS, AWS, Google Drive accounts) | ⏳ need test accounts |
+| Encryption of the local data directory, object-lock retention set by unth | planned |
 
 ## M4 — Multi-server operations
 Enrollment, secure transport, multi-server dashboard, RBAC, monitoring, notifications.
