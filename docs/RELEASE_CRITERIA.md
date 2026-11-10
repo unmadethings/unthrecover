@@ -17,7 +17,8 @@
 | No secrets in logs/files | ✅ integration test |
 | CI run on GitHub | ✅ run #3 green (38b2b3f) |
 | govulncheck | ✅ clean in CI run #3 |
-| Release artifacts + checksums | ⬜ |
+| Release artifacts + checksums | ✅ built by release.yml; verified on a clean runner and anonymously |
+| Published | ✅ 2026-11-09 (pre-release); notes updated 2026-11-10 |
 | Repository public-readiness review (secrets, history, licenses) | ✅ gitleaks + license audit on the branch |
 
 The alpha must not be advertised as production-ready.

@@ -86,3 +86,15 @@ match → checksum PASS but run FAILED; plus `Decide()` unit tests).
 | Unsafe tar entries (absolute, `..`, outside root, hard link out, duplicate, limits) | **PASS** | `internal/volume` |
 | Installer: install, dry run, tampered binary, missing checksum, invalid version, http base URL | **PASS** | `make test-install` |
 | systemd units | **PASS** (syntax) | `systemd-analyze verify` (only error: binary not installed in sandbox); not run under a real systemd PID 1 |
+
+## Release v0.1.0-alpha — clean-machine test (2026-11-10)
+
+| Check | Result | Evidence |
+|---|---|---|
+| Published assets download + `sha256sum -c SHA256SUMS` (amd64, arm64) | **PASS** | publish-release run #2 — https://github.com/unmadethings/unthrecover/actions/runs/42826860958 |
+| `scripts/install.sh --version v0.1.0-alpha` on a fresh runner | **PASS** | same run |
+| Released binary: `version`, `doctor` (all PASS), backup + verify on PostgreSQL 16 → VERIFIED (46,800 rows, 10/10 steps) | **PASS** | same run |
+| Corrupted artifact with the released binary → FAILED / CHECKSUM_MISMATCH, exit 3, no restore attempted | **PASS** | same run |
+| No leftover resources | **PASS** | same run |
+| Anonymous install from GitHub (public repo, `raw.githubusercontent.com` + release download) | **PASS** | manual check from the dev sandbox |
+
