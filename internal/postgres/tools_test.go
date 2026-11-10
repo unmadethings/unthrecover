@@ -34,8 +34,15 @@ func TestFindToolPrefersMatchingMajor(t *testing.T) {
 	if tl, err := FindTool(ctx, "pg_dump", 13); err != nil || tl.Major != 13 {
 		t.Fatalf("major 13: %+v %v", tl, err)
 	}
-	// no matching install -> PATH tool
-	if tl, err := FindTool(ctx, "pg_dump", 15); err != nil || tl.Major != 17 {
+	// no exact match -> nearest newer installed major, not the newest
+	if tl, err := FindTool(ctx, "pg_dump", 12); err != nil || tl.Major != 13 {
+		t.Fatalf("nearest newer for 12: %+v %v", tl, err)
+	}
+	if tl, err := FindTool(ctx, "pg_dump", 15); err != nil || tl.Major != 16 {
+		t.Fatalf("nearest newer for 15: %+v %v", tl, err)
+	}
+	// nothing installed at or above the major -> PATH tool
+	if tl, err := FindTool(ctx, "pg_dump", 17); err != nil || tl.Major != 17 {
 		t.Fatalf("fallback: %+v %v", tl, err)
 	}
 	if ms := InstalledMajors(ctx, "pg_dump"); len(ms) != 2 || ms[0] != 13 || ms[1] != 16 {
@@ -43,7 +50,7 @@ func TestFindToolPrefersMatchingMajor(t *testing.T) {
 	}
 	// a directory whose binary reports a different major is not trusted
 	fakeTool(t, filepath.Join(root, "pg14", "bin"), "pg_dump", "12.1")
-	if tl, _ := FindTool(ctx, "pg_dump", 14); tl.Major != 17 {
+	if tl, _ := FindTool(ctx, "pg_dump", 14); tl.Major != 16 {
 		t.Fatalf("mismatched versioned dir accepted: %+v", tl)
 	}
 	if MajorOf("pg_dump (PostgreSQL) 16.15 (Ubuntu 16.15-1)") != 16 || MajorOf("garbage") != 0 {

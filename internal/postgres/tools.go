@@ -66,12 +66,12 @@ func FindTool(ctx context.Context, name string, major int) (*ToolInfo, error) {
 		return LookupTool(ctx, name)
 	}
 	if major > 0 {
-		for _, pattern := range versionedDirs {
-			p := filepath.Join(fmt.Sprintf(pattern, major), name)
-			if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() && fi.Mode()&0o111 != 0 {
-				if t, err := inspectTool(ctx, name, p); err == nil && t.Major == major {
-					return t, nil
-				}
+		// Exact major first, then the NEAREST newer major (e.g. 13 for a
+		// PostgreSQL 12 server) — never jump to the newest, whose pg_restore
+		// may emit settings the older restore target rejects.
+		for m := major; m <= major+15; m++ {
+			if t := versionedTool(ctx, name, m); t != nil {
+				return t, nil
 			}
 		}
 	}
@@ -80,6 +80,18 @@ func FindTool(ctx context.Context, name string, major int) (*ToolInfo, error) {
 		return nil, err
 	}
 	return t, nil
+}
+
+func versionedTool(ctx context.Context, name string, major int) *ToolInfo {
+	for _, pattern := range versionedDirs {
+		p := filepath.Join(fmt.Sprintf(pattern, major), name)
+		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() && fi.Mode()&0o111 != 0 {
+			if t, err := inspectTool(ctx, name, p); err == nil && t.Major == major {
+				return t
+			}
+		}
+	}
+	return nil
 }
 
 // InstalledMajors lists the majors of a tool found in standard directories.
