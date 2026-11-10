@@ -40,6 +40,12 @@ version, data directory, free space, and unfinished operations. Exit 1 if any ch
 Read-only inventory of containers and volumes with a backup-support assessment. Only GET
 requests are sent to the Docker Engine.
 
+### `unth discover jobs [--write-dir DIR] [--format text|json]`
+Finds PostgreSQL containers, recognizes Coolify, Dokploy and Docker Compose, and prints a
+ready-to-review job per database (host on the shared network, database, user, same image for the
+restore test, network to join). Passwords are never read; jobs use `password_env`. `--write-dir`
+writes `<workload>.yaml` files and never overwrites. See [COOLIFY_DOKPLOY.md](COOLIFY_DOKPLOY.md).
+
 ### `unth discover postgres --config FILE [--format text|json]`
 Connects with the job configuration (read-only transaction), reports server version,
 database size, table count, recovery state, and whether the local `pg_dump` can back it up.

@@ -477,6 +477,7 @@ type ContainerInfo struct {
 	Config struct {
 		Image  string            `json:"Image"`
 		Labels map[string]string `json:"Labels"`
+		Env    []string          `json:"Env"` // read by discovery for non-secret names only
 	} `json:"Config"`
 	NetworkSettings struct {
 		Networks map[string]struct {

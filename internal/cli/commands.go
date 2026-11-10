@@ -260,7 +260,54 @@ func newDiscoverCmd(app *App) *cobra.Command {
 	pgCmd.Flags().StringVarP(&cfgPath, "config", "c", "", "job configuration file (required)")
 	_ = pgCmd.MarkFlagRequired("config")
 
-	cmd.AddCommand(dockerCmd, pgCmd)
+	var writeDir string
+	jobsCmd := &cobra.Command{
+		Use:   "jobs",
+		Short: "Suggest job configurations for PostgreSQL containers (Coolify, Dokploy, Compose, Docker) (read-only)",
+		Long: `Jobs finds PostgreSQL containers, recognizes Coolify, Dokploy and Docker Compose from their
+labels and networks, and prints a ready-to-review job configuration for each: host name on the
+shared Docker network, database, user, the same image for the restore test (same extensions),
+and which network unth must join. Database passwords are never read: each job uses password_env
+and says where to find the password. --write-dir writes <workload>.yaml files (never overwrites).`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := checkFormat(format); err != nil {
+				return err
+			}
+			dc, err := dockerClient()
+			if err != nil {
+				return err
+			}
+			js, err := discovery.SuggestJobs(cmd.Context(), dc)
+			if err != nil {
+				return failure.New(failure.DockerUnavailable, "Docker discovery failed", err)
+			}
+			if format == "json" {
+				return writeJSON(app.Out, js)
+			}
+			if len(js) == 0 {
+				fmt.Fprintln(app.Out, "No PostgreSQL containers found.")
+				return nil
+			}
+			for _, j := range js {
+				fmt.Fprintf(app.Out, "── %s  (%s, container %s)\n%s\n", j.Workload, j.Platform, j.Container, j.YAML)
+			}
+			if writeDir != "" {
+				written, skipped, err := discovery.WriteJobs(writeDir, js)
+				for _, p := range written {
+					fmt.Fprintf(app.Out, "wrote   %s\n", p)
+				}
+				for _, p := range skipped {
+					fmt.Fprintf(app.Out, "skipped %s (exists)\n", p)
+				}
+				return err
+			}
+			return nil
+		},
+	}
+	jobsCmd.Flags().StringVar(&format, "format", "text", "output format: text|json")
+	jobsCmd.Flags().StringVar(&writeDir, "write-dir", "", "write <workload>.yaml files into this directory (never overwrites)")
+	cmd.AddCommand(dockerCmd, pgCmd, jobsCmd)
 	return cmd
 }
 

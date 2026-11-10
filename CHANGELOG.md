@@ -21,6 +21,9 @@ versioning: [SemVer](https://semver.org/).
   disaster-recovery path (import on a new machine, then `unth verify`).
 - Panel: offsite copies on the overview and per backup.
 - `compose.yaml` mounts `./keys` and `./rclone` for offsite keys and the rclone configuration.
+- `unth discover jobs [--write-dir]`: finds PostgreSQL containers, recognizes Coolify, Dokploy and
+  Docker Compose, and writes ready-to-review jobs (same image for the restore test, network to
+  join); passwords are never read. docs/COOLIFY_DOKPLOY.md.
 - Container image includes rclone 1.75.2 (pinned by SHA-256); `scripts/install-rclone.sh`.
 
 ### Changed
