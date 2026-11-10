@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/unmadethings/unthrecover/internal/security"
 )
@@ -84,5 +85,67 @@ func TestRedactingHandler(t *testing.T) {
 	log.With("dsn", "password=topsecretvalue").Info("connecting with topsecretvalue", "err", os.ErrNotExist, "x", []string{"topsecretvalue"})
 	if strings.Contains(buf.String(), "topsecretvalue") {
 		t.Fatalf("log leaked secret: %s", buf.String())
+	}
+}
+
+func TestNextRunDaily(t *testing.T) {
+	loc := time.FixedZone("X", 3*3600)
+	now := time.Date(2026, 3, 10, 2, 59, 0, 0, loc)
+	if got := nextRun(now, 0, 3, 0, true); !got.Equal(time.Date(2026, 3, 10, 3, 0, 0, 0, loc)) {
+		t.Fatalf("same day: %v", got)
+	}
+	now = time.Date(2026, 3, 10, 3, 0, 0, 0, loc) // exactly at: next day
+	if got := nextRun(now, 0, 3, 0, true); !got.Equal(time.Date(2026, 3, 11, 3, 0, 0, 0, loc)) {
+		t.Fatalf("next day: %v", got)
+	}
+	now = time.Date(2026, 12, 31, 23, 30, 0, 0, loc)
+	if got := nextRun(now, 0, 0, 15, true); !got.Equal(time.Date(2027, 1, 1, 0, 15, 0, 0, loc)) {
+		t.Fatalf("year rollover: %v", got)
+	}
+	if got := nextRun(now, 6*time.Hour, 0, 0, false); !got.Equal(now.Add(6 * time.Hour)) {
+		t.Fatalf("every: %v", got)
+	}
+}
+
+func TestParseClock(t *testing.T) {
+	for _, bad := range []string{"", "3", "25:00", "03:60", "3pm", "03:00:00"} {
+		if _, _, err := parseClock(bad); err == nil {
+			t.Fatalf("%q accepted", bad)
+		}
+	}
+	if h, m, err := parseClock("03:30"); err != nil || h != 3 || m != 30 {
+		t.Fatalf("03:30 -> %d %d %v", h, m, err)
+	}
+}
+
+func TestListJobs(t *testing.T) {
+	d := t.TempDir()
+	for _, n := range []string{"b.yaml", "a.yml", ".hidden.yaml", "notes.txt", "c.env"} {
+		_ = os.WriteFile(filepath.Join(d, n), []byte("x"), 0o600)
+	}
+	_ = os.Mkdir(filepath.Join(d, "sub.yaml"), 0o700)
+	got, err := listJobs(d)
+	if err != nil || len(got) != 2 || filepath.Base(got[0]) != "a.yml" || filepath.Base(got[1]) != "b.yaml" {
+		t.Fatalf("%v %v", got, err)
+	}
+}
+
+func TestScheduleRejectsBadUsage(t *testing.T) {
+	d := t.TempDir()
+	empty := t.TempDir()
+	_ = os.WriteFile(filepath.Join(d, "bad.yaml"), []byte("version: 1\nsource: {}\n"), 0o600)
+	cases := [][]string{
+		{"schedule", "--jobs-dir", d},                                   // neither --at nor --every
+		{"schedule", "--jobs-dir", d, "--at", "03:00", "--every", "1h"}, // both
+		{"schedule", "--jobs-dir", d, "--every", "30s"},                 // too frequent
+		{"schedule", "--jobs-dir", d, "--at", "3pm"},                    // bad clock
+		{"schedule", "--jobs-dir", empty, "--every", "1h"},              // no jobs
+		{"schedule", "--jobs-dir", filepath.Join(d, "missing"), "--every", "1h"},
+		{"schedule", "--jobs-dir", d, "--every", "1h"}, // invalid job config reported at start
+	}
+	for _, c := range cases {
+		if code, _, _ := run(t, c...); code != 2 {
+			t.Fatalf("%v: exit %d, want 2", c, code)
+		}
 	}
 }

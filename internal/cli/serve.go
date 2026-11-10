@@ -18,6 +18,7 @@ import (
 
 func newServeCmd(app *App) *cobra.Command {
 	var listen, certFile, keyFile, tokenFile string
+	var behindProxy bool
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the authenticated web management panel",
@@ -48,7 +49,7 @@ characters. Plain HTTP is only allowed on loopback addresses; anything else need
 			if tls && (certFile == "" || keyFile == "") {
 				return &ExitError{Code: ExitUsage, Err: errors.New("--tls-cert and --tls-key must be used together")}
 			}
-			if err := web.CheckListen(listen, tls); err != nil {
+			if err := web.CheckListen(listen, tls, behindProxy); err != nil {
 				return &ExitError{Code: ExitUsage, Err: err}
 			}
 			store, r, err := app.openStore(cmd.Context())
@@ -56,7 +57,7 @@ characters. Plain HTTP is only allowed on loopback addresses; anything else need
 				return err
 			}
 			defer store.Close()
-			s := &web.Server{Store: store, Repo: r, Docker: dockerClient, Redactor: app.Redactor, Log: app.Log, Token: token, TLS: tls}
+			s := &web.Server{Store: store, Repo: r, Docker: dockerClient, Redactor: app.Redactor, Log: app.Log, Token: token, TLS: tls, BehindProxy: behindProxy}
 			srv := &http.Server{Addr: listen, Handler: s.Handler(cmd.Context()), ReadHeaderTimeout: 10 * time.Second,
 				ReadTimeout: 30 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 120 * time.Second}
 			// Bind before announcing readiness, so "panel on ..." means the port is open.
@@ -77,6 +78,9 @@ characters. Plain HTTP is only allowed on loopback addresses; anything else need
 				scheme = "https"
 			}
 			fmt.Fprintf(app.Out, "Unth Recover panel on %s://%s (data dir %s)\n", scheme, listen, r.Root)
+			if behindProxy && !tls {
+				fmt.Fprintln(app.Out, "Plain HTTP behind a reverse proxy: TLS must be terminated by the proxy; do not publish this port to a network.")
+			}
 			select {
 			case err := <-errCh:
 				if errors.Is(err, http.ErrServerClosed) {
@@ -94,6 +98,7 @@ characters. Plain HTTP is only allowed on loopback addresses; anything else need
 	cmd.Flags().StringVar(&listen, "listen", "127.0.0.1:8484", "address to listen on (non-loopback requires TLS)")
 	cmd.Flags().StringVar(&certFile, "tls-cert", "", "TLS certificate file")
 	cmd.Flags().StringVar(&keyFile, "tls-key", "", "TLS private key file")
+	cmd.Flags().BoolVar(&behindProxy, "behind-proxy", false, "allow plain HTTP on any address because a reverse proxy terminates TLS (never expose the port directly)")
 	cmd.Flags().StringVar(&tokenFile, "token-file", "", "file containing the admin token (0600); default: $UNTH_UI_TOKEN")
 	return cmd
 }

@@ -199,6 +199,16 @@ jobs:
           docker pull "ghcr.io/${GITHUB_REPOSITORY}:$TAG"
           docker run --rm "ghcr.io/${GITHUB_REPOSITORY}:$TAG" version | grep -q "$TAG"
           docker run --rm --entrypoint sh "ghcr.io/${GITHUB_REPOSITORY}:$TAG" -c 'ls /usr/lib/postgresql' | tr '\n' ' '
+      - name: "v0.3+: .rpm installs on Rocky Linux 9; compose.yaml pins this release"
+        if: inputs.tag != 'v0.1.0-alpha' && inputs.tag != 'v0.2.0-alpha'
+        run: |
+          set -euo pipefail
+          sh scripts/test-rpm.sh rel/"$TAG"/unthrecover_*_amd64.rpm rockylinux:9
+          grep -q "ghcr.io/unmadethings/unthrecover:$TAG}" rel/"$TAG"/compose.yaml
+          cd "$RUNNER_TEMP" && mkdir -p composetest/jobs && cd composetest
+          cp "$GITHUB_WORKSPACE/rel/$TAG/compose.yaml" .
+          printf 'UNTH_UI_TOKEN=%s\nDOCKER_GID=%s\n' "$(openssl rand -hex 24)" "$(stat -c %g /var/run/docker.sock)" > .env
+          docker compose config --quiet
       - name: Leftover resource check
         if: always()
         run: |

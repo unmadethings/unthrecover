@@ -84,9 +84,41 @@ sha256sum -c SHA256SUMS --ignore-missing && sudo apt install ./unthrecover_0.2.0
 
 Removing the package never deletes backups (`/var/lib/unthrecover`) or job configs (`/etc/unth`).
 
+## Fedora / RHEL / Rocky / AlmaLinux package (.rpm)
+Release assets include `unthrecover_<version>_<arch>.rpm` with the same contents and behaviour as
+the `.deb` (units in `/usr/lib/systemd/system`). It recommends `postgresql` and `docker`; install
+a PostgreSQL client whose major version is ≥ your servers (e.g. `postgresql16` from PGDG).
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing && sudo dnf install ./unthrecover_0.3.0-beta_amd64.rpm
+```
+
+Tested by installing into clean Rocky Linux 9 and Fedora 41 containers (`scripts/test-rpm.sh`).
+
+## Docker Compose
+Each release includes a `compose.yaml` pinned to that release's image: a **scheduler**
+(`unth schedule`, daily at 03:00 by default) and the **panel** (on `127.0.0.1:8484`).
+
+```bash
+mkdir unthrecover && cd unthrecover        # put the downloaded compose.yaml here
+mkdir jobs                                 # one job per file, e.g. jobs/shop-db.yaml
+echo "UNTH_UI_TOKEN=$(openssl rand -hex 32)" > .env
+echo "DOCKER_GID=$(stat -c %g /var/run/docker.sock)" >> .env
+echo "SHOP_DB_PASSWORD=..." >> .env        # referenced in the job as password_env
+chmod 600 .env
+docker compose up -d
+docker compose logs -f scheduler
+```
+
+If the database runs in another Compose project or in Coolify/Dokploy, add its network to the
+scheduler (instructions inside the file) and use the database's service name as `host`. Settings:
+`UNTH_SCHEDULE` (e.g. `--every 6h`), `TZ`, `UNTH_PANEL_PORT`. Tested end to end by
+`TestComposeDeployment` (scheduler backs up and verifies, panel login, no secrets in logs).
+
 ## Container image
 `ghcr.io/unmadethings/unthrecover:<version>` (linux/amd64, linux/arm64) is built from the same
-release binaries. It contains PostgreSQL 17 client tools (backs up servers 12–17), runs as an
+release binaries. It contains PostgreSQL client tools 13–17 (backs up servers 12–17, each with the
+matching or nearest newer client), runs as an
 unprivileged user and needs the Docker socket — which is root-equivalent; only run it where
 Docker access is already granted. During verification the container attaches itself to each
 isolated sandbox network (`UNTH_SANDBOX_JOIN=auto`) and detaches again during cleanup, so it

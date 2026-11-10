@@ -3,7 +3,8 @@
 //
 // Security model:
 //   - authentication is always required (admin token from a 0600 file or env);
-//   - listening on a non-loopback address requires TLS;
+//   - listening on a non-loopback address requires TLS, unless the operator
+//     explicitly declares a TLS-terminating reverse proxy (BehindProxy);
 //   - sessions are random 256-bit IDs in HttpOnly, SameSite=Strict cookies
 //     (Secure when TLS is on), expiring after 12h;
 //   - state-changing requests additionally require the X-Unth-CSRF header,
@@ -58,7 +59,10 @@ type Server struct {
 	Log      *slog.Logger
 	Token    string
 	TLS      bool
-	Now      func() time.Time
+	// BehindProxy: plain HTTP on any address is allowed because the operator
+	// declared that a reverse proxy terminates TLS (Coolify, Dokploy, Traefik, Caddy).
+	BehindProxy bool
+	Now         func() time.Time
 
 	mu        sync.Mutex
 	sessions  map[string]time.Time
@@ -76,12 +80,12 @@ func ValidateToken(t string) error {
 }
 
 // CheckListen refuses plain HTTP on non-loopback addresses.
-func CheckListen(addr string, tls bool) error {
+func CheckListen(addr string, tls, behindProxy bool) error {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return fmt.Errorf("invalid --listen %q: %w", addr, err)
 	}
-	if tls {
+	if tls || behindProxy {
 		return nil
 	}
 	if host == "localhost" {
@@ -90,7 +94,14 @@ func CheckListen(addr string, tls bool) error {
 	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
 		return nil
 	}
-	return fmt.Errorf("refusing to serve plain HTTP on %q: use a loopback address (e.g. 127.0.0.1:8484) or provide --tls-cert/--tls-key", addr)
+	return fmt.Errorf("refusing to serve plain HTTP on %q: use a loopback address (e.g. 127.0.0.1:8484) or provide --tls-cert/--tls-key, or --behind-proxy when a reverse proxy terminates TLS", addr)
+}
+
+// secure reports whether the browser reached the panel over HTTPS: directly
+// (TLS) or through a declared TLS-terminating proxy. It only ever makes the
+// session cookie stricter, so trusting X-Forwarded-Proto here is safe.
+func (s *Server) secure(r *http.Request) bool {
+	return s.TLS || (s.BehindProxy && r.Header.Get("X-Forwarded-Proto") == "https")
 }
 
 func (s *Server) now() time.Time {
@@ -217,8 +228,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	s.sessions[id] = now.Add(sessionTTL)
 	delete(s.failures, ip)
 	s.mu.Unlock()
-	// #nosec G124 -- Secure is set whenever TLS is on; plain HTTP is only allowed on loopback (CheckListen)
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: id, Path: "/", HttpOnly: true, Secure: s.TLS,
+	// #nosec G124 -- Secure whenever the browser uses HTTPS (TLS or declared proxy); plain HTTP otherwise only on loopback or behind a declared proxy (CheckListen)
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: id, Path: "/", HttpOnly: true, Secure: s.secure(r),
 		SameSite: http.SameSiteStrictMode, MaxAge: int(sessionTTL.Seconds())})
 	s.auditEvent(r.Context(), "ui.login", ip, "success", "")
 	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true})
@@ -230,8 +241,8 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		delete(s.sessions, c.Value)
 		s.mu.Unlock()
 	}
-	// #nosec G124 -- see login: Secure under TLS, loopback-only otherwise
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, Secure: s.TLS,
+	// #nosec G124 -- see login
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, Secure: s.secure(r),
 		SameSite: http.SameSiteStrictMode, MaxAge: -1})
 	writeJSON(w, http.StatusOK, map[string]any{"authenticated": false})
 }
@@ -557,7 +568,7 @@ func (s *Server) audit(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{"version": buildinfo.Version, "commit": buildinfo.Commit, "go": buildinfo.GoVersion(),
-		"data_dir": s.Repo.Root, "tls": s.TLS}
+		"data_dir": s.Repo.Root, "tls": s.TLS, "behind_proxy": s.BehindProxy}
 	if free, err := repo.FreeBytes(s.Repo.Root); err == nil {
 		out["free_bytes"] = free
 	}

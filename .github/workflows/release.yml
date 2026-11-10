@@ -55,7 +55,7 @@ jobs:
         run: make check test-integration
       - name: Vulnerability scan
         run: make vuln
-      - name: Build artifacts, .deb packages and checksums
+      - name: Build artifacts, .deb/.rpm packages and checksums
         run: make dist VERSION="$VERSION"
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3

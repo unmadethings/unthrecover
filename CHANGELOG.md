@@ -3,6 +3,16 @@
 All notable changes are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning: [SemVer](https://semver.org/).
 
+## [Unreleased] — v0.3.0-beta
+
+### Added
+- `.rpm` packages (Fedora, RHEL, Rocky, AlmaLinux), built with nfpm; tested on Rocky Linux 9 and
+  Fedora 41.
+- `compose.yaml` release asset (scheduler + panel), pinned to the release image.
+- `unth schedule --at HH:MM | --every DUR`: built-in scheduler for containers.
+- `unth serve --behind-proxy`: plain HTTP inside a container when a reverse proxy terminates TLS;
+  the session cookie is Secure when the proxy reports HTTPS.
+
 ## [0.2.0-alpha] — 2026-11-10 — M1 (Self-hosted Community Edition) + M2 web panel preview
 
 ### Added

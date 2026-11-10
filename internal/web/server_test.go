@@ -241,15 +241,48 @@ func TestDataEndpoints(t *testing.T) {
 	}
 }
 
+// Behind a declared TLS-terminating proxy the cookie is Secure exactly when the
+// proxy reports HTTPS.
+func TestBehindProxyCookie(t *testing.T) {
+	srv, ts, _ := newTestServer(t, false)
+	srv.BehindProxy = true
+	for proto, secure := range map[string]bool{"https": true, "http": false, "": false} {
+		req, _ := http.NewRequest("POST", ts.URL+"/api/login", strings.NewReader(`{"token":"`+tok+`"}`))
+		if proto != "" {
+			req.Header.Set("X-Forwarded-Proto", proto)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		var c *http.Cookie
+		for _, x := range resp.Cookies() {
+			if x.Name == cookieName {
+				c = x
+			}
+		}
+		if c == nil || c.Secure != secure || !c.HttpOnly || c.SameSite != http.SameSiteStrictMode {
+			t.Fatalf("proto=%q cookie %+v", proto, c)
+		}
+	}
+}
+
 func TestListenAndTokenPolicy(t *testing.T) {
 	for addr, ok := range map[string]bool{"127.0.0.1:8484": true, "localhost:1": true, "[::1]:8484": true,
 		"0.0.0.0:8484": false, "10.0.0.5:80": false, ":8484": false} {
-		if err := CheckListen(addr, false); (err == nil) != ok {
+		if err := CheckListen(addr, false, false); (err == nil) != ok {
 			t.Errorf("%s plain: %v", addr, err)
 		}
 	}
-	if CheckListen("0.0.0.0:8443", true) != nil {
+	if CheckListen("0.0.0.0:8443", true, false) != nil {
 		t.Error("TLS on all interfaces must be allowed")
+	}
+	if CheckListen("0.0.0.0:8484", false, true) != nil {
+		t.Error("plain HTTP behind a declared proxy must be allowed")
+	}
+	if CheckListen("nonsense", false, true) == nil {
+		t.Error("invalid address accepted")
 	}
 	if ValidateToken("short") == nil || ValidateToken(tok) != nil {
 		t.Error("token policy")

@@ -43,10 +43,13 @@ dist: ## Release binaries + SHA256SUMS in dist/
 	for arch in amd64 arm64; do \
 	  CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" -o dist/unth_$(VERSION)_linux_$$arch ./cmd/unth; \
 	done
-	for arch in amd64 arm64; do sh scripts/build-deb.sh $(VERSION) $$arch >/dev/null; done
-	cd dist && sha256sum unth_* unthrecover_* > SHA256SUMS
+	for arch in amd64 arm64; do sh scripts/build-deb.sh $(VERSION) $$arch >/dev/null; sh scripts/build-rpm.sh $(VERSION) $$arch >/dev/null; done
+	sed 's#ghcr.io/unmadethings/unthrecover:v[0-9][^}]*#ghcr.io/unmadethings/unthrecover:$(VERSION)#' deployments/compose/compose.yaml > dist/compose.yaml
+	grep -q 'unthrecover:$(VERSION)}' dist/compose.yaml
+	cd dist && sha256sum unth_* unthrecover_* compose.yaml > SHA256SUMS
 
-deb: dist ## Debian packages (built by dist)
+deb: dist ## Debian and RPM packages (built by dist)
+rpm: dist
 
 web: ## Build the web panel into internal/web/dist (embedded by go build)
 	cd web && npm ci --no-audit --no-fund && npm run build

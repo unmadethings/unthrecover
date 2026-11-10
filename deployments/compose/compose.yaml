@@ -1,0 +1,65 @@
+# Unth Recover with Docker Compose: scheduled backups with verified recovery + web panel.
+#
+# 1. Put this file in an empty folder and add your jobs, one file per job:
+#      mkdir jobs
+#      jobs/shop-db.yaml   (example: https://github.com/unmadethings/unthrecover/blob/main/examples/backup.yaml)
+#    In the job, use  password_env: SHOP_DB_PASSWORD  and put the password in .env (step 2).
+# 2. Create .env (keep it private):
+#      echo "UNTH_UI_TOKEN=$(openssl rand -hex 32)"           >  .env
+#      echo "DOCKER_GID=$(stat -c %g /var/run/docker.sock)"   >> .env
+#      echo "SHOP_DB_PASSWORD=..."                            >> .env
+#      chmod 600 .env
+# 3. docker compose up -d
+#    Panel: http://127.0.0.1:8484 (only from this machine; log in with UNTH_UI_TOKEN).
+#    Logs:  docker compose logs -f scheduler
+#
+# The database must be reachable from the scheduler. If it runs in another Compose project
+# (or in Coolify/Dokploy), add that network below under "networks" and use the database
+# service name as host.
+#
+# Security: both services use the Docker socket (needed to restore into isolated test
+# containers), which is root-equivalent on this host. See docs/SECURITY_THREAT_MODEL.md.
+name: unthrecover
+
+x-unth: &unth
+  image: ${UNTH_IMAGE:-ghcr.io/unmadethings/unthrecover:v0.3.0-beta}
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    UNTH_DATA_DIR: /var/lib/unthrecover
+    TZ: ${TZ:-UTC}
+  group_add:
+    - "${DOCKER_GID:?set DOCKER_GID in .env: stat -c %g /var/run/docker.sock}"
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - unth-data:/var/lib/unthrecover
+    - ./jobs:/etc/unth/jobs:ro
+  read_only: true
+  tmpfs:
+    - /tmp
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  scheduler:
+    <<: *unth
+    # Every day at 03:00 (TZ above). Other examples: "--every 6h", "--at 01:30 --run-at-start".
+    command: schedule --jobs-dir /etc/unth/jobs ${UNTH_SCHEDULE:---at 03:00}
+    # networks: [default, myapp_default]
+
+  panel:
+    <<: *unth
+    command: serve --listen 0.0.0.0:8484 --behind-proxy
+    ports:
+      # Loopback only. To use a domain, put a reverse proxy with HTTPS in front
+      # (Coolify/Dokploy do this) and remove this mapping.
+      - "127.0.0.1:${UNTH_PANEL_PORT:-8484}:8484"
+
+volumes:
+  unth-data:
+
+# networks:
+#   myapp_default:
+#     external: true

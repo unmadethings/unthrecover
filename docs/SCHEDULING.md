@@ -17,7 +17,13 @@
 | 4 | job succeeded but a notification could not be delivered | alert (you would otherwise miss future failures) |
 | 130 | cancelled (SIGINT/SIGTERM) | investigate |
 
-## systemd (recommended)
+## Containers: `unth schedule` and Docker Compose
+Without systemd or cron (Docker Compose, Coolify, Dokploy) run the built-in scheduler:
+`unth schedule --at 03:00` runs every job in `/etc/unth/jobs` daily at 03:00, each exactly like
+`unth run`. The release ships a ready `compose.yaml` (scheduler + panel); see
+[INSTALLATION.md](INSTALLATION.md#docker-compose).
+
+## systemd (recommended on hosts)
 
 Templates: [`deployments/systemd/unth@.service`](../deployments/systemd/unth@.service) and
 [`unth@.timer`](../deployments/systemd/unth@.timer). One instance per job.

@@ -92,10 +92,20 @@ Applies the job's `retention:` rules to its workload. Expired backups lose their
 directory and become `EXPIRED`; history is kept. The newest VERIFIED backup is never expired.
 Exit 2 if no retention rules are configured.
 
-### `unth serve [--listen 127.0.0.1:8484] [--token-file FILE] [--tls-cert C --tls-key K]`
+### `unth serve [--listen 127.0.0.1:8484] [--token-file FILE] [--tls-cert C --tls-key K] [--behind-proxy]`
 Authenticated web management panel and JSON API. See [WEB_PANEL.md](WEB_PANEL.md). The admin
 token comes from `--token-file` (0600) or `UNTH_UI_TOKEN` (min. 24 chars); plain HTTP only on
-loopback, otherwise TLS is required.
+loopback, otherwise TLS is required — or `--behind-proxy`, which declares that a reverse proxy
+terminates TLS (Coolify, Dokploy, Traefik, Caddy, the Compose file). Never publish such a port
+directly to a network.
+
+### `unth schedule (--at HH:MM | --every DUR) [--jobs-dir /etc/unth/jobs] [--run-at-start]`
+Scheduler for containers without systemd/cron: runs every `*.yaml` job in `--jobs-dir`, one after
+another, each exactly like `unth run`. All job files are validated at start (exit 2 on errors).
+A failing job is logged (one line per job: outcome, verification status, error category) and
+does not stop the others. `--at` uses `TZ` (default UTC in the image); `--every` is at least 1m.
+The job list is re-read every round. SIGINT/SIGTERM stops it; a running job is recorded as
+CANCELLED.
 
 ### `unth audit list [--format text|json] [--limit N]`
 Audit trail of backups, verifications and cleanups (no secret values).

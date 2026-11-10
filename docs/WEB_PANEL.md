@@ -31,7 +31,8 @@ Light and dark themes follow the operating system.
 
 ## Security
 Token login (constant-time compare, ≥24 chars, from a 0600 file or `UNTH_UI_TOKEN`); HttpOnly,
-SameSite=Strict session cookies (Secure under TLS) valid for 12 h; state-changing API calls need
+SameSite=Strict session cookies (Secure under TLS, or behind a declared proxy when it reports
+`X-Forwarded-Proto: https`) valid for 12 h; state-changing API calls need
 the `X-Unth-CSRF: 1` header; 5 failed logins per minute per address → HTTP 429; CSP `default-src
 'self'`, `frame-ancestors 'none'`, `nosniff`, `no-referrer`; all logins and UI-started
 verifications are audited. There is a single admin role in this release (RBAC is planned for M4).
@@ -48,3 +49,9 @@ The UI lives in `web/` (React + TypeScript + Vite) and is built into `internal/w
 ```bash
 make web
 ```
+
+## Behind a reverse proxy (Compose, Coolify, Dokploy)
+`unth serve --listen 0.0.0.0:8484 --behind-proxy` serves plain HTTP inside a container and leaves
+TLS to the proxy. The Compose file publishes the port on `127.0.0.1` only. The client address used
+for login rate limiting is the proxy's (forwarded headers are not trusted for it), which makes the
+limit stricter, not weaker.

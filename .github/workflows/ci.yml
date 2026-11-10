@@ -98,7 +98,7 @@ jobs:
           if [ -n "$left" ]; then echo "Leftover resources: $left"; exit 1; fi
 
   packaging:
-    name: Packaging (.deb + container image, PostgreSQL ${{ matrix.pg }} source)
+    name: Packaging (.deb/.rpm + container image, PostgreSQL ${{ matrix.pg }} source)
     runs-on: ubuntu-24.04
     needs: check
     strategy:
@@ -114,19 +114,24 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: Build release artifacts (binaries, .deb, SHA256SUMS)
+      - name: Build release artifacts (binaries, .deb, .rpm, SHA256SUMS)
         run: make dist VERSION=v0.0.0-ci
       - name: Install the .deb in a clean Debian container
         if: matrix.pg == '16'
         run: sh scripts/test-deb.sh dist/unthrecover_0.0.0-ci_amd64.deb
+      - name: Install the .rpm in clean Rocky Linux 9 and Fedora containers
+        if: matrix.pg == '16'
+        run: |
+          sh scripts/test-rpm.sh dist/unthrecover_0.0.0-ci_amd64.rpm rockylinux:9
+          sh scripts/test-rpm.sh dist/unthrecover_0.0.0-ci_amd64.rpm fedora:41
       - name: Build the container image (PGDG clients 13-17)
         run: docker build --build-arg VERSION=v0.0.0-ci -t unthrecover:ci .
       - name: Host PostgreSQL client for the test harness
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q postgresql-client-16
-      - name: unth inside the container backs up and verifies PostgreSQL ${{ matrix.pg }} and a volume
-        run: UNTH_INTEGRATION_REQUIRED=1 go test -tags integration -count=1 -timeout 20m -v -run 'TestContainerImageRunsJob' ./tests/integration/...
+      - name: unth inside the container (docker run and Compose) backs up and verifies PostgreSQL ${{ matrix.pg }} and a volume
+        run: UNTH_INTEGRATION_REQUIRED=1 go test -tags integration -count=1 -timeout 20m -v -run 'TestContainerImageRunsJob|TestComposeDeployment' ./tests/integration/...
 
   secrets:
     name: Secret scan
