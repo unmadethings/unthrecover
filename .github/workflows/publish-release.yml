@@ -36,14 +36,22 @@ jobs:
         run: |
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "invalid tag"; exit 1; }
           test -f ".github/release-notes/$TAG.md" || { echo "missing release notes"; exit 1; }
-      - name: Publish draft
+      - name: Publish draft (or update notes of an already published release)
         run: |
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-                 --jq ".[] | select(.tag_name == \"$TAG\" and .draft) | .id" | head -n1)
-          [ -n "$id" ] || { echo "no draft release for $TAG"; exit 1; }
-          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" \
-            -F draft=false -F prerelease=true -f make_latest=false \
-            -F "body=@.github/release-notes/$TAG.md" --jq '.html_url'
+          rel=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+                  --jq ".[] | select(.tag_name == \"$TAG\") | \"\(.id) \(.draft)\"" | head -n1)
+          [ -n "$rel" ] || { echo "no release for $TAG"; exit 1; }
+          id=${rel%% *}; draft=${rel#* }
+          if [ "$draft" = "true" ]; then
+            echo "publishing draft $id"
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" \
+              -F draft=false -F prerelease=true -f make_latest=false \
+              -F "body=@.github/release-notes/$TAG.md" --jq '.html_url'
+          else
+            echo "release $id is already published; updating its notes only"
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" \
+              -F "body=@.github/release-notes/$TAG.md" --jq '.html_url'
+          fi
           git ls-remote --exit-code --tags origin "refs/tags/$TAG"
 
   smoke:
