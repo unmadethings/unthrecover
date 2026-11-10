@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -46,14 +47,91 @@ type ToolInfo struct {
 
 var versionRe = regexp.MustCompile(`\(PostgreSQL\)\s+(\d+)(?:\.(\d+))?`)
 
-// LookupTool finds a PostgreSQL client tool and parses its version.
+// versionedDirs are the standard per-major installation directories of
+// PostgreSQL client tools (Debian/Ubuntu, Alpine, RHEL/PGDG, Homebrew).
+var versionedDirs = []string{
+	"/usr/lib/postgresql/%d/bin",
+	"/usr/libexec/postgresql%d",
+	"/usr/pgsql-%d/bin",
+	"/opt/homebrew/opt/postgresql@%d/bin",
+	"/usr/local/opt/postgresql@%d/bin",
+}
+
+// FindTool returns the client tool whose major version equals major if one
+// is installed in a standard per-version directory or on PATH; otherwise the
+// tool found on PATH. Using matching versions matters: e.g. pg_restore 17
+// emits `SET transaction_timeout`, which PostgreSQL 16 and older reject.
+func FindTool(ctx context.Context, name string, major int) (*ToolInfo, error) {
+	if dir := os.Getenv("UNTH_PG_BINDIR"); dir != "" {
+		return LookupTool(ctx, name)
+	}
+	if major > 0 {
+		for _, pattern := range versionedDirs {
+			p := filepath.Join(fmt.Sprintf(pattern, major), name)
+			if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() && fi.Mode()&0o111 != 0 {
+				if t, err := inspectTool(ctx, name, p); err == nil && t.Major == major {
+					return t, nil
+				}
+			}
+		}
+	}
+	t, err := LookupTool(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+// InstalledMajors lists the majors of a tool found in standard directories.
+func InstalledMajors(ctx context.Context, name string) []int {
+	if os.Getenv("UNTH_PG_BINDIR") != "" {
+		return nil
+	}
+	var out []int
+	for m := 9; m <= 30; m++ {
+		for _, pattern := range versionedDirs {
+			p := filepath.Join(fmt.Sprintf(pattern, m), name)
+			if _, err := os.Stat(p); err == nil {
+				out = append(out, m)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// MajorOf parses the major version from a `--version` string.
+func MajorOf(version string) int {
+	m := versionRe.FindStringSubmatch(version)
+	if m == nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(m[1])
+	return n
+}
+
+// LookupTool finds a PostgreSQL client tool on PATH and parses its version.
+//
+// UNTH_PG_BINDIR, if set, forces the tools to be taken from that directory
+// only (operator override when several installations exist).
 func LookupTool(ctx context.Context, name string) (*ToolInfo, error) {
+	if dir := os.Getenv("UNTH_PG_BINDIR"); dir != "" {
+		p := filepath.Join(dir, name)
+		if fi, err := os.Stat(p); err != nil || !fi.Mode().IsRegular() { // #nosec G703 -- operator-configured tool directory
+			return nil, failure.New(failure.ToolMissing, name+" not found in UNTH_PG_BINDIR "+dir, err)
+		}
+		return inspectTool(ctx, name, p)
+	}
 	path, err := exec.LookPath(name)
 	if err != nil {
 		return nil, failure.New(failure.ToolMissing, name+" not found in PATH", err).
 			WithHint("install the PostgreSQL client tools (e.g. apt install postgresql-client-16)")
 	}
-	out, err := exec.CommandContext(ctx, path, "--version").Output() // #nosec G204 -- fixed tool, fixed arg
+	return inspectTool(ctx, name, path)
+}
+
+func inspectTool(ctx context.Context, name, path string) (*ToolInfo, error) {
+	out, err := exec.CommandContext(ctx, path, "--version").Output() // #nosec G204 G702 -- operator-configured client tool path, fixed argument
 	if err != nil {
 		return nil, failure.New(failure.ToolMissing, name+" --version failed", err)
 	}
@@ -214,7 +292,12 @@ func Restore(ctx context.Context, tool *ToolInfo, p ConnParams, path string, red
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		return failure.New(failure.RestoreFailed, "pg_restore failed: "+red.Redact(strings.TrimSpace(stderr.buf.String())), err)
+		msg := red.Redact(strings.TrimSpace(stderr.buf.String()))
+		fe := failure.New(failure.RestoreFailed, "pg_restore failed: "+msg, err)
+		if strings.Contains(msg, "unrecognized configuration parameter") {
+			fe = fe.WithHint(fmt.Sprintf("%s is newer than the restore target and emits settings it does not know; install the PostgreSQL client tools matching the source major version (unth uses /usr/lib/postgresql/<major>/bin automatically)", tool.Version))
+		}
+		return fe
 	}
 	return nil
 }

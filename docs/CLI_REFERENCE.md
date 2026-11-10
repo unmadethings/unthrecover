@@ -10,7 +10,10 @@ covered by the CLI smoke/integration tests in `tests/integration`.
 | `--data-dir` | `$UNTH_DATA_DIR`, else `$XDG_DATA_HOME/unthrecover`, else `~/.local/share/unthrecover` | Metadata DB, backups, reports. Created `0700`. |
 | `--log-level` | `warn` | `debug`, `info`, `warn`, `error`. Logs go to stderr and are secret-redacted. |
 
-Environment: `DOCKER_HOST` (only `unix://` sockets are accepted), `UNTH_DATA_DIR`.
+Environment: `DOCKER_HOST` (only `unix://` sockets are accepted), `UNTH_DATA_DIR`,
+`UNTH_PG_BINDIR` (force PostgreSQL client tools from one directory), `UNTH_SANDBOX_JOIN`
+(container name/ID or `auto`: attach unth's own container to sandbox networks; set in the image),
+`UNTH_UI_TOKEN` (`unth serve`).
 
 ## Exit codes
 

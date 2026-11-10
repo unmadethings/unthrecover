@@ -128,12 +128,9 @@ func (e *Engine) run(ctx context.Context, cfg *config.Config, b *metadata.Backup
 	}
 	e.Redactor.Add(password)
 
-	tool, err := postgres.LookupTool(ctx, "pg_dump")
-	if err != nil {
-		return err
-	}
-	restoreTool, err := postgres.LookupTool(ctx, "pg_restore")
-	if err != nil {
+	// Fail early if no client tools exist at all; the version-matched tools
+	// are selected once the server version is known.
+	if _, err := postgres.LookupTool(ctx, "pg_dump"); err != nil && len(postgres.InstalledMajors(ctx, "pg_dump")) == 0 {
 		return err
 	}
 
@@ -175,6 +172,15 @@ func (e *Engine) run(ctx context.Context, cfg *config.Config, b *metadata.Backup
 	if err != nil {
 		return failure.New(failure.ConnectionFailed, "query server version", err)
 	}
+	tool, err := postgres.FindTool(ctx, "pg_dump", major)
+	if err != nil {
+		return err
+	}
+	restoreTool, err := postgres.FindTool(ctx, "pg_restore", tool.Major)
+	if err != nil {
+		return err
+	}
+	e.Log.Info("client tools selected", "pg_dump", tool.Path, "pg_restore", restoreTool.Path)
 	b.ServerVersion, b.ServerMajor, b.ToolVersion = ver, major, tool.Version
 	if err := postgres.CheckDumpCompatibility(tool, major); err != nil {
 		return err

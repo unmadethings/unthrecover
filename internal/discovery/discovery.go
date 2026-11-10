@@ -144,7 +144,7 @@ func Postgres(ctx context.Context, src config.Source, password string) (*Postgre
 		(SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
 		 WHERE c.relkind='r' AND n.nspname NOT IN ('pg_catalog','information_schema','pg_toast'))`).
 		Scan(&r.DatabaseSize, &r.InRecovery, &r.UserTables)
-	tool, err := postgres.LookupTool(ctx, "pg_dump")
+	tool, err := postgres.FindTool(ctx, "pg_dump", r.ServerMajor)
 	if err != nil {
 		r.Compatibility = err.Error()
 		return r, nil

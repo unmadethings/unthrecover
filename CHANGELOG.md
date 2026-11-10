@@ -3,7 +3,7 @@
 All notable changes are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning: [SemVer](https://semver.org/).
 
-## [Unreleased] — M1 (Self-hosted Community Edition)
+## [0.2.0-alpha] — M1 (Self-hosted Community Edition) + M2 web panel preview
 
 ### Added
 - `unth run`: scheduled job = per-job lock → backup → verify → retention → notify; exit code 4
@@ -26,6 +26,10 @@ versioning: [SemVer](https://semver.org/).
   Vite, embedded in the binary.
 - Packaging: `.deb` (systemd units, `unth` user), container image built from release binaries
   (unth attaches itself to sandbox networks: `UNTH_SANDBOX_JOIN`).
+- Version-matched PostgreSQL client tools: unth uses `pg_dump`/`pg_restore` of the source
+  server's major from standard per-version directories (override: `UNTH_PG_BINDIR`). Fixes
+  restores failing with `unrecognized configuration parameter "transaction_timeout"` when
+  client tools 17 were used for PostgreSQL ≤ 16 sources (found by the new container test).
 - User interview kit (docs/research/KULLANICI_GORUSMELERI.md).
 - `scripts/install.sh`: downloads a release binary + SHA256SUMS, verifies, smoke-runs and
   installs atomically; refuses mismatches, missing entries, invalid versions and plain http.

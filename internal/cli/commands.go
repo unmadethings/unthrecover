@@ -94,11 +94,20 @@ func newDoctorCmd(app *App) *cobra.Command {
 			}
 			for _, t := range []string{"pg_dump", "pg_restore"} {
 				ti, err := postgres.LookupTool(ctx, t)
+				if err != nil {
+					if ms := postgres.InstalledMajors(ctx, t); len(ms) > 0 {
+						ti, err = postgres.FindTool(ctx, t, ms[len(ms)-1])
+					}
+				}
 				switch {
 				case err != nil:
 					add(t, "FAIL", app.Redactor.RedactError(err))
 				case t == "pg_dump":
-					add(t, "PASS", fmt.Sprintf("%s (can back up PostgreSQL %d–%d)", ti.Version, postgres.MinServerMajor, ti.Major))
+					extra := ""
+					if ms := postgres.InstalledMajors(ctx, t); len(ms) > 0 {
+						extra = fmt.Sprintf("; version-matched clients installed for majors %v", ms)
+					}
+					add(t, "PASS", fmt.Sprintf("%s (can back up PostgreSQL %d–%d)%s", ti.Version, postgres.MinServerMajor, ti.Major, extra))
 				default:
 					add(t, "PASS", fmt.Sprintf("%s (reads archives from pg_dump <= %d)", ti.Version, ti.Major))
 				}

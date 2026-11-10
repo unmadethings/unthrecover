@@ -98,3 +98,23 @@ match → checksum PASS but run FAILED; plus `Decide()` unit tests).
 | No leftover resources | **PASS** | same run |
 | Anonymous install from GitHub (public repo, `raw.githubusercontent.com` + release download) | **PASS** | manual check from the dev sandbox |
 
+
+## v0.2.0-alpha candidate (2026-11-10, local; CI run recorded after it completes)
+
+| Area | Result | Test |
+|---|---|---|
+| Unit tests incl. web API (auth on every endpoint, forged/expired sessions, cookie flags with/without TLS, logout, CSRF header, rate limit 429 + audit, security headers, SPA fallback, listen/token policy, secret redaction in API) | **PASS** | `go test -race ./...` |
+| Version-matched client tools (per-major dirs, PATH fallback, mismatched dir rejected, `UNTH_PG_BINDIR`) | **PASS** | `internal/postgres` |
+| Panel end-to-end with the real binary: login, Verify now → real isolated restore → VERIFIED, concurrent verify refused (409), audit, token not logged | **PASS** | `TestWebPanelEndToEnd` |
+| Panel in Chromium (Playwright): wrong token error, login, overview, backup detail with 4/4 pipeline and report, activity, settings, sign out locks API, no horizontal overflow at 390 px, no console errors | **PASS** | `tests/e2e/panel.mjs` via `UNTH_TEST_BROWSER=1` |
+| `unth serve` refuses missing/short token and plain HTTP on 0.0.0.0 | **PASS** | `TestServeRefusesUnsafeConfig` |
+| Container image: `doctor`, two `unth run` jobs with retention, volume job — unth inside a container joins/leaves its sandbox networks, no leftovers | **PASS** (local image on `postgres:16` base; the PGDG 13–17 image is built and tested in CI for PostgreSQL 12/16/17) | `TestContainerImageRunsJob` |
+| `.deb` in a clean Debian container: install, user/groups, permissions (/, data dir, jobs dir), unit paths, run as `unth`, removal keeps backups | **PASS** | `scripts/test-deb.sh` |
+| Installer | **PASS** (6/6) | `make test-install` |
+| Full integration suite | **PASS** 34, SKIP 1 (opt-in large DB) | `make test-integration` |
+| Web build reproducible (embedded dist == fresh build) | **PASS** | `make web` + `git diff` |
+| gosec / staticcheck / gitleaks / npm audit | **PASS** (gosec: 4 reviewed and annotated) | |
+
+Defects found by these tests and fixed: pg_restore 17 → PostgreSQL ≤16 `transaction_timeout`
+restore failure (version-matched tools); `.deb` packaged its root directory as 0700; two test
+assertion errors.

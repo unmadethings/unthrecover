@@ -228,7 +228,8 @@ func (e *Engine) execute(ctx context.Context, st *runState) {
 	// 4. Archive structure readable by pg_restore.
 	var restoreTool *postgres.ToolInfo
 	e.step(ctx, st, StepArchive, func(ctx context.Context) (string, error) {
-		t, err := postgres.LookupTool(ctx, "pg_restore")
+		// Use the pg_restore matching the pg_dump that produced the archive.
+		t, err := postgres.FindTool(ctx, "pg_restore", postgres.MajorOf(b.ToolVersion))
 		if err != nil {
 			return "", err
 		}

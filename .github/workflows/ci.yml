@@ -32,6 +32,13 @@ jobs:
         run: make build && ./bin/unth version
       - name: Installer tests
         run: make test-install
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Web panel builds from source and matches the embedded copy
+        run: |
+          make web
+          git diff --exit-code -- internal/web/dist || { echo "internal/web/dist is stale: run make web and commit"; exit 1; }
       - name: govulncheck
         run: make vuln
       - name: gosec
@@ -56,6 +63,7 @@ jobs:
       UNTH_TEST_SOURCE_IMAGE: postgres:${{ matrix.pg }}-alpine
       UNTH_TEST_RESTORE_IMAGE: postgres:${{ matrix.pg }}-alpine
       UNTH_TEST_TINY_FS: /mnt/unth-tiny
+      UNTH_TEST_BROWSER: ${{ matrix.pg == '16' && '1' || '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -70,6 +78,12 @@ jobs:
           echo "/usr/lib/postgresql/${{ matrix.client }}/bin" >> "$GITHUB_PATH"
       - name: Tool versions
         run: pg_dump --version && pg_restore --version && docker info --format 'Docker {{.ServerVersion}}'
+      - name: Browser for the web panel e2e test (PostgreSQL 16 leg)
+        if: matrix.pg == '16'
+        run: |
+          npm install -g playwright@1.63.0
+          npx -y playwright@1.63.0 install --with-deps chromium
+          echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
       - name: Tiny tmpfs for the disk-full test
         run: |
           sudo mkdir -p "$UNTH_TEST_TINY_FS"
@@ -82,6 +96,37 @@ jobs:
         run: |
           left=$(docker ps -aq --filter label=io.unthrecover.managed=true; docker volume ls -q --filter label=io.unthrecover.managed=true; docker network ls -q --filter label=io.unthrecover.managed=true)
           if [ -n "$left" ]; then echo "Leftover resources: $left"; exit 1; fi
+
+  packaging:
+    name: Packaging (.deb + container image, PostgreSQL ${{ matrix.pg }} source)
+    runs-on: ubuntu-24.04
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ["12", "16", "17"]
+    env:
+      UNTH_TEST_SOURCE_IMAGE: postgres:${{ matrix.pg }}-alpine
+      UNTH_TEST_RESTORE_IMAGE: postgres:${{ matrix.pg }}-alpine
+      UNTH_TEST_IMAGE: unthrecover:ci
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Build release artifacts (binaries, .deb, SHA256SUMS)
+        run: make dist VERSION=v0.0.0-ci
+      - name: Install the .deb in a clean Debian container
+        if: matrix.pg == '16'
+        run: sh scripts/test-deb.sh dist/unthrecover_0.0.0~ci_amd64.deb
+      - name: Build the container image (PGDG clients 13-17)
+        run: docker build --build-arg VERSION=v0.0.0-ci -t unthrecover:ci .
+      - name: Host PostgreSQL client for the test harness
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-client-16
+      - name: unth inside the container backs up and verifies PostgreSQL ${{ matrix.pg }} and a volume
+        run: UNTH_INTEGRATION_REQUIRED=1 go test -tags integration -count=1 -timeout 20m -v -run 'TestContainerImageRunsJob' ./tests/integration/...
 
   secrets:
     name: Secret scan

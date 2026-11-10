@@ -217,6 +217,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	s.sessions[id] = now.Add(sessionTTL)
 	delete(s.failures, ip)
 	s.mu.Unlock()
+	// #nosec G124 -- Secure is set whenever TLS is on; plain HTTP is only allowed on loopback (CheckListen)
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: id, Path: "/", HttpOnly: true, Secure: s.TLS,
 		SameSite: http.SameSiteStrictMode, MaxAge: int(sessionTTL.Seconds())})
 	s.auditEvent(r.Context(), "ui.login", ip, "success", "")
@@ -229,6 +230,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		delete(s.sessions, c.Value)
 		s.mu.Unlock()
 	}
+	// #nosec G124 -- see login: Secure under TLS, loopback-only otherwise
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, Secure: s.TLS,
 		SameSite: http.SameSiteStrictMode, MaxAge: -1})
 	writeJSON(w, http.StatusOK, map[string]any{"authenticated": false})

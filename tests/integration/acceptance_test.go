@@ -524,8 +524,10 @@ func TestUnsupportedVersionViaOlderTool(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(shimDir, "pg_dump"), []byte(shim), 0o700); err != nil {
 		t.Fatal(err)
 	}
+	realRestore, _ := exec.LookPath("pg_restore")
+	_ = os.Symlink(realRestore, filepath.Join(shimDir, "pg_restore"))
 	e := newEnv(t)
-	e.extra = []string{"PATH=" + shimDir + string(os.PathListSeparator) + os.Getenv("PATH")}
+	e.extra = []string{"UNTH_PG_BINDIR=" + shimDir}
 	v, r := e.backup(e.config(cfgOpts{}))
 	if r.code != 1 || v["error_category"] != "UNSUPPORTED_VERSION" {
 		t.Fatalf("code=%d v=%v stderr=%s", r.code, v, r.stderr)

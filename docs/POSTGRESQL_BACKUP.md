@@ -16,6 +16,14 @@ if you need roles. Logical backups restore to the snapshot moment — no point-i
 - Tested in CI with source and restore on the same major: PostgreSQL 12, 13, 14, 15 and 16
   (pg_dump 16) and 17 (pg_dump 17); full integration suite per version.
 - Restore image defaults to `postgres:<source major>`.
+- **Version-matched client tools.** unth prefers `pg_dump`/`pg_restore` whose major equals the
+  source server's, looking in `/usr/lib/postgresql/<N>/bin` (Debian/Ubuntu), `/usr/libexec/postgresql<N>`
+  (Alpine), `/usr/pgsql-<N>/bin` (RHEL/PGDG) and Homebrew, then `PATH`. The archive is restored with
+  the `pg_restore` matching the `pg_dump` that wrote it. This matters: `pg_restore` 17 emits
+  `SET transaction_timeout`, which PostgreSQL 16 and older reject (found by the container-image
+  test; such a backup is correctly reported FAILED/RESTORE_FAILED with a hint). Install the
+  client for each source major you back up (e.g. `postgresql-client-16`), or force a directory
+  with `UNTH_PG_BINDIR=/path/to/bin`. `unth doctor` lists the installed majors.
 
 ## Recommended backup role
 ```sql

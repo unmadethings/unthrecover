@@ -12,6 +12,7 @@ BIN="dist/unth_${TAG}_linux_${ARCH}"
 DEBVER=$(printf '%s' "${TAG#v}" | sed 's/-/~/')
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
+chmod 0755 "$ROOT"
 
 install -d -m 0755 "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/lib/systemd/system" \
   "$ROOT/usr/share/doc/unthrecover/examples" "$ROOT/etc/unth/jobs"
