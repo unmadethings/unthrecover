@@ -24,6 +24,7 @@ import (
 
 	"github.com/unmadethings/unthrecover/internal/buildinfo"
 	"github.com/unmadethings/unthrecover/internal/config"
+	"github.com/unmadethings/unthrecover/internal/docker"
 	"github.com/unmadethings/unthrecover/internal/failure"
 	"github.com/unmadethings/unthrecover/internal/manifest"
 	"github.com/unmadethings/unthrecover/internal/metadata"
@@ -41,6 +42,8 @@ type Engine struct {
 	Repo     *repo.Repo
 	Redactor *security.Redactor
 	Log      *slog.Logger
+	// Docker is required for docker-volume backups.
+	Docker func() (*docker.Client, error)
 }
 
 // Result summarizes a finished backup.

@@ -49,6 +49,13 @@ streamed to a private temp file while hashing → `pg_restore --list` → move i
 `backups/<id>/` with `manifest.json`. Status ends as `BACKUP_CREATED`, `FAILED` or `CANCELLED`.
 Partial files are always removed on failure.
 
+### `unth backup volume --config FILE [--format text|json]`
+File-level backup of a Docker volume (`source.type: docker-volume`). `consistency: offline`
+refuses while a running container mounts the volume (`CONSISTENCY_UNSAFE`); `consistency: stop`
+stops exactly those containers for the copy and restarts them. See
+[DOCKER_VOLUME_BACKUP.md](DOCKER_VOLUME_BACKUP.md). `backup postgres` and `backup volume` refuse
+configs of the other type (exit 2); `unth run` handles both.
+
 ### `unth backup list [--format text|json] [--limit N]`
 Newest first, with backup status and latest verification status.
 
@@ -108,6 +115,9 @@ literal `password` key is rejected: use `password_env` or `password_file` (must 
 | `verification.memory_mb` / `cpus` / `pids_limit` | `1024` / `1.0` / `512` | Sandbox limits |
 | `verification.table_hash_max_rows` | `100000` | Tables up to this size get a full content hash |
 | `verification.queries[]` | — | `{name, sql}` read-only assertions |
+| `source.type: docker-volume` → `volume` | — | Docker volume name |
+| `source.consistency` | `offline` | `offline` or `stop` |
+| `source.helper_image` / `stop_timeout` | `busybox:1.36.1` / `30s` | Never-started mount container image; graceful stop timeout |
 | `retention.keep_last` / `keep_daily` / `keep_weekly` | — | See [SCHEDULING.md](SCHEDULING.md) |
 | `retention.max_age` | — | e.g. `2160h`; minimum `1h` |
 | `notifications[].name` / `type` | — | `type`: `webhook` or `slack` |

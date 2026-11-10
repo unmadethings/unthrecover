@@ -74,7 +74,7 @@ func (m *FileManifest) Digest() string {
 
 func typeOf(t byte) (string, bool) {
 	switch t {
-	case tar.TypeReg, tar.TypeRegA: //nolint:staticcheck // TypeRegA appears in old archives
+	case tar.TypeReg: // archive/tar normalizes legacy TypeRegA to TypeReg
 		return "file", true
 	case tar.TypeDir:
 		return "dir", true
@@ -155,7 +155,7 @@ func Scan(r io.Reader, lim Limits) (*FileManifest, error) {
 				return nil, fmt.Errorf("%w: archive exceeds size limit", ErrUnsafeArchive)
 			}
 			hs := sha256.New()
-			n, err := io.Copy(hs, tr)
+			n, err := io.CopyN(hs, tr, h.Size) // bounded by the header size checked above
 			if err != nil {
 				return nil, fmt.Errorf("read %q: %w", rel, err)
 			}

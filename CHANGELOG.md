@@ -13,6 +13,10 @@ versioning: [SemVer](https://semver.org/).
 - Notifications: generic webhook (JSON, optional HMAC-SHA256 signature) and Slack-compatible;
   URLs/secrets only from environment variables, https required (loopback http allowed),
   redirects not followed.
+- Docker volume backups (`unth backup volume`, `type: docker-volume`): consistency `offline`
+  (refuse with running writers) or `stop` (stop/restart exactly the mounting containers,
+  audited); archive via never-started helper containers; per-file manifest; verification by
+  restore into a new isolated volume and full file comparison; unsafe archives rejected.
 - systemd service/timer templates (hardened) and a cron example; docs/SCHEDULING.md.
 - CI: PostgreSQL 12–17 integration matrix; disk-full test runs on CI.
 

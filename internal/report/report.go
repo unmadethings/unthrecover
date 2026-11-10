@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/unmadethings/unthrecover/internal/postgres"
+	"github.com/unmadethings/unthrecover/internal/volume"
 )
 
 // Step statuses.
@@ -96,6 +97,7 @@ type Report struct {
 	Steps            []Step               `json:"steps"`
 	Scope            Scope                `json:"verification_scope"`
 	Comparison       *postgres.Comparison `json:"comparison,omitempty"`
+	FileComparison   *volume.Comparison   `json:"file_comparison,omitempty"`
 	Objectives       Objectives           `json:"recovery_objectives"`
 	Environment      Environment          `json:"environment"`
 	Cleanup          Cleanup              `json:"cleanup"`
@@ -126,11 +128,17 @@ func (r *Report) Text(w io.Writer) error {
 	fmt.Fprintf(&b, "Backup ID:         %s\n", r.BackupID)
 	fmt.Fprintf(&b, "Workload:          %s\n", r.WorkloadID)
 	if r.Source != nil {
-		fmt.Fprintf(&b, "Source:            %v@%v:%v/%v\n", r.Source["user"], r.Source["host"], r.Source["port"], r.Source["database"])
+		if r.Source["type"] == "docker-volume" {
+			fmt.Fprintf(&b, "Source:            Docker volume %v (consistency: %v)\n", r.Source["volume"], r.Source["consistency"])
+		} else {
+			fmt.Fprintf(&b, "Source:            %v@%v:%v/%v\n", r.Source["user"], r.Source["host"], r.Source["port"], r.Source["database"])
+		}
 	}
 	fmt.Fprintf(&b, "Backup size:       %d bytes\n", r.Backup.SizeBytes)
 	fmt.Fprintf(&b, "Backup SHA-256:    %s\n", r.Backup.SHA256)
-	fmt.Fprintf(&b, "Source version:    %s\n", r.Backup.ServerVersion)
+	if r.Backup.ServerVersion != "" {
+		fmt.Fprintf(&b, "Source version:    %s\n", r.Backup.ServerVersion)
+	}
 	fmt.Fprintf(&b, "Snapshot taken at: %s\n", r.Backup.SnapshotAt.Format(time.RFC3339))
 	fmt.Fprintf(&b, "Tested at:         %s\n", r.StartedAt.Format(time.RFC3339))
 	fmt.Fprintf(&b, "\nChecksum:          %s\n", r.ChecksumResult)
@@ -153,6 +161,13 @@ func (r *Report) Text(w io.Writer) error {
 			c.TablesChecked, c.TablesHashed, c.RowsExpected, c.RowsActual, c.QueriesChecked)
 		for _, m := range append(append(append([]postgres.Mismatch{}, c.DataMismatches...), c.SchemaMismatches...), c.QueryMismatches...) {
 			fmt.Fprintf(&b, "  MISMATCH %s %s: expected=%s actual=%s\n", m.Check, m.Object, oneLine(m.Expected, 60), oneLine(m.Actual, 60))
+		}
+	}
+	if c := r.FileComparison; c != nil {
+		fmt.Fprintf(&b, "\nFile checks: %d entries expected, %d restored; %d bytes expected, %d restored; %d differences\n",
+			c.EntriesExpected, c.EntriesActual, c.BytesExpected, c.BytesActual, c.MismatchCount)
+		for _, m := range c.Mismatches {
+			fmt.Fprintf(&b, "  MISMATCH %s %s: expected=%s actual=%s\n", m.Path, m.Field, oneLine(m.Expected, 60), oneLine(m.Actual, 60))
 		}
 	}
 	fmt.Fprintf(&b, "\nVerification scope — covered:\n")

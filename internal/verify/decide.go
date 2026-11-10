@@ -21,7 +21,28 @@ const (
 	StepQueries     = "assertion_queries"
 )
 
-// MandatorySteps lists, in order, the steps required for VERIFIED.
+// Steps specific to docker-volume backups.
+const (
+	StepFiles = "file_integrity"
+)
+
+// BackupTypeVolume is the backup type of Docker volume backups.
+const BackupTypeVolume = "docker-volume"
+
+// VolumeMandatorySteps are required for VERIFIED on docker-volume backups.
+var VolumeMandatorySteps = []string{
+	StepArtifact, StepManifest, StepChecksum, StepArchive, StepEnvironment, StepRestore, StepFiles,
+}
+
+// MandatoryFor returns the mandatory steps for a backup type.
+func MandatoryFor(backupType string) []string {
+	if backupType == BackupTypeVolume {
+		return VolumeMandatorySteps
+	}
+	return MandatorySteps
+}
+
+// MandatorySteps lists, in order, the steps required for VERIFIED (PostgreSQL).
 var MandatorySteps = []string{
 	StepArtifact, StepManifest, StepChecksum, StepArchive, StepEnvironment,
 	StepRestore, StepHealth, StepData, StepSchema, StepQueries,
@@ -35,6 +56,15 @@ var MandatorySteps = []string{
 //     yields FAILED;
 //   - only a complete set of passing mandatory steps yields VERIFIED.
 func Decide(steps []report.Step, cancelled bool) string {
+	return DecideFor(steps, cancelled, MandatorySteps)
+}
+
+// DecideFor applies the same rule with an explicit mandatory step list. An
+// empty list never verifies.
+func DecideFor(steps []report.Step, cancelled bool, mandatory []string) string {
+	if len(mandatory) == 0 && !cancelled {
+		return metadata.VerifyFailed
+	}
 	if cancelled {
 		return metadata.VerifyCanceled
 	}
@@ -48,7 +78,7 @@ func Decide(steps []report.Step, cancelled bool) string {
 		}
 		byName[s.Name] = s
 	}
-	for _, name := range MandatorySteps {
+	for _, name := range mandatory {
 		s, ok := byName[name]
 		if !ok || s.Status != report.StepPass || !s.Mandatory {
 			return metadata.VerifyFailed

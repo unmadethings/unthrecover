@@ -29,6 +29,7 @@ import (
 	"github.com/unmadethings/unthrecover/internal/report"
 	"github.com/unmadethings/unthrecover/internal/restore"
 	"github.com/unmadethings/unthrecover/internal/security"
+	"github.com/unmadethings/unthrecover/internal/volume"
 )
 
 // MaxArtifactBytes bounds artifacts accepted for verification (1 TiB).
@@ -62,6 +63,17 @@ type runState struct {
 	manifest   *manifest.Manifest
 	restoreDur time.Duration
 	failErr    error
+	mandatory  []string
+	files      *volume.FileManifest
+}
+
+func (st *runState) isMandatory(name string) bool {
+	for _, m := range st.mandatory {
+		if m == name {
+			return true
+		}
+	}
+	return false
 }
 
 // ErrNotVerifiable is returned when the backup cannot enter verification.
@@ -117,7 +129,7 @@ func (e *Engine) Run(ctx context.Context, backupID string, opts Options) (*repor
 
 	var src map[string]any
 	_ = json.Unmarshal([]byte(b.SourceJSON), &src)
-	st := &runState{run: run, backup: b, settings: settings, rep: &report.Report{
+	st := &runState{run: run, backup: b, settings: settings, mandatory: MandatoryFor(b.BackupType), rep: &report.Report{
 		ReportVersion: 1, ToolVersion: buildinfo.Version, RunID: run.ID, BackupID: b.ID,
 		WorkloadID: b.WorkloadID, Source: src, StartedAt: run.StartedAt,
 		Backup: report.BackupInfo{CreatedAt: b.CreatedAt, SizeBytes: b.SizeBytes, SHA256: b.SHA256,
@@ -140,7 +152,7 @@ func (e *Engine) Run(ctx context.Context, backupID string, opts Options) (*repor
 // the step failed (subsequent steps are then recorded as NOT_RUN).
 func (e *Engine) step(ctx context.Context, st *runState, name string, fn func(ctx context.Context) (string, error)) bool {
 	if st.failErr != nil {
-		st.rep.Steps = append(st.rep.Steps, report.Step{Name: name, Mandatory: isMandatory(name), Status: report.StepNotRun})
+		st.rep.Steps = append(st.rep.Steps, report.Step{Name: name, Mandatory: st.isMandatory(name), Status: report.StepNotRun})
 		return false
 	}
 	start := time.Now()
@@ -148,7 +160,7 @@ func (e *Engine) step(ctx context.Context, st *runState, name string, fn func(ct
 	if err == nil && ctx.Err() != nil {
 		err = ctx.Err()
 	}
-	s := report.Step{Name: name, Mandatory: isMandatory(name), Status: report.StepPass,
+	s := report.Step{Name: name, Mandatory: st.isMandatory(name), Status: report.StepPass,
 		DurationMS: time.Since(start).Milliseconds(), Detail: e.Redactor.Redact(detail)}
 	if err != nil {
 		s.Status = report.StepFail
@@ -163,15 +175,6 @@ func (e *Engine) step(ctx context.Context, st *runState, name string, fn func(ct
 	return err == nil
 }
 
-func isMandatory(name string) bool {
-	for _, m := range MandatorySteps {
-		if m == name {
-			return true
-		}
-	}
-	return false
-}
-
 func (e *Engine) setRunStatus(ctx context.Context, st *runState, status string) {
 	st.run.Status = status
 	if err := e.Store.UpdateRun(ctx, st.run); err != nil {
@@ -181,37 +184,12 @@ func (e *Engine) setRunStatus(ctx context.Context, st *runState, status string) 
 
 func (e *Engine) execute(ctx context.Context, st *runState) {
 	b := st.backup
+	if b.BackupType == BackupTypeVolume {
+		e.executeVolume(ctx, st)
+		return
+	}
 
-	// 1. Artifact accessible: path validation, no symlinks, regular file, size.
-	e.step(ctx, st, StepArtifact, func(ctx context.Context) (string, error) {
-		if b.ArtifactPath == "" {
-			return "", failure.New(failure.ArtifactMissing, "backup record has no artifact path", nil)
-		}
-		p, err := st.backupPath(e.Repo, b.ArtifactPath)
-		if err != nil {
-			return "", err
-		}
-		fi, err := os.Lstat(p)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return "", failure.New(failure.ArtifactMissing, "backup artifact not found at "+b.ArtifactPath, err).
-					WithHint("the artifact was deleted or moved; take a new backup")
-			}
-			return "", failure.New(failure.ArtifactMissing, "cannot access artifact", err)
-		}
-		if !fi.Mode().IsRegular() {
-			return "", failure.New(failure.ArtifactInvalid, "artifact is not a regular file", nil)
-		}
-		if fi.Size() > MaxArtifactBytes {
-			return "", failure.New(failure.ArtifactInvalid, "artifact exceeds maximum supported size", nil)
-		}
-		if fi.Size() != b.SizeBytes {
-			return "", failure.New(failure.ChecksumMismatch,
-				fmt.Sprintf("artifact size %d differs from recorded size %d", fi.Size(), b.SizeBytes), nil)
-		}
-		st.artifact = p
-		return fmt.Sprintf("%s (%d bytes)", b.ArtifactPath, fi.Size()), nil
-	})
+	e.stepArtifact(ctx, st)
 
 	// 2. Manifest valid and consistent with the metadata database.
 	e.step(ctx, st, StepManifest, func(ctx context.Context) (string, error) {
@@ -245,20 +223,7 @@ func (e *Engine) execute(ctx context.Context, st *runState) {
 		return fmt.Sprintf("format v%d, %d tables fingerprinted", m.FormatVersion, len(fp.Tables)), nil
 	})
 
-	// 3. Checksum recomputed from the bytes on disk.
-	ok := e.step(ctx, st, StepChecksum, func(ctx context.Context) (string, error) {
-		sum, n, err := manifest.HashFile(st.artifact)
-		if err != nil {
-			return "", failure.New(failure.ArtifactMissing, "read artifact", err)
-		}
-		if n != b.SizeBytes || sum != b.SHA256 {
-			return "", failure.New(failure.ChecksumMismatch,
-				fmt.Sprintf("SHA-256 mismatch: expected %s, got %s", b.SHA256, sum), nil).
-				WithHint("the artifact is corrupted or was modified; do not rely on this backup")
-		}
-		return "sha256 " + sum, nil
-	})
-	st.rep.ChecksumResult = resultOf(ok, st)
+	e.stepChecksum(ctx, st)
 
 	// 4. Archive structure readable by pg_restore.
 	var restoreTool *postgres.ToolInfo
@@ -307,7 +272,7 @@ func (e *Engine) execute(ctx context.Context, st *runState) {
 	})
 
 	// 6. Real restore.
-	ok = e.step(ctx, st, StepRestore, func(ctx context.Context) (string, error) {
+	ok := e.step(ctx, st, StepRestore, func(ctx context.Context) (string, error) {
 		start := time.Now()
 		err := postgres.Restore(ctx, restoreTool, sb.Params, st.artifact, e.Redactor)
 		st.restoreDur = time.Since(start)
@@ -389,6 +354,61 @@ func (e *Engine) execute(ctx context.Context, st *runState) {
 	})
 }
 
+// stepArtifact: path validation, no symlinks, regular file, size (all backup types).
+func (e *Engine) stepArtifact(ctx context.Context, st *runState) {
+	b := st.backup
+	// 1. Artifact accessible: path validation, no symlinks, regular file, size.
+	e.step(ctx, st, StepArtifact, func(ctx context.Context) (string, error) {
+		if b.ArtifactPath == "" {
+			return "", failure.New(failure.ArtifactMissing, "backup record has no artifact path", nil)
+		}
+		p, err := st.backupPath(e.Repo, b.ArtifactPath)
+		if err != nil {
+			return "", err
+		}
+		fi, err := os.Lstat(p)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return "", failure.New(failure.ArtifactMissing, "backup artifact not found at "+b.ArtifactPath, err).
+					WithHint("the artifact was deleted or moved; take a new backup")
+			}
+			return "", failure.New(failure.ArtifactMissing, "cannot access artifact", err)
+		}
+		if !fi.Mode().IsRegular() {
+			return "", failure.New(failure.ArtifactInvalid, "artifact is not a regular file", nil)
+		}
+		if fi.Size() > MaxArtifactBytes {
+			return "", failure.New(failure.ArtifactInvalid, "artifact exceeds maximum supported size", nil)
+		}
+		if fi.Size() != b.SizeBytes {
+			return "", failure.New(failure.ChecksumMismatch,
+				fmt.Sprintf("artifact size %d differs from recorded size %d", fi.Size(), b.SizeBytes), nil)
+		}
+		st.artifact = p
+		return fmt.Sprintf("%s (%d bytes)", b.ArtifactPath, fi.Size()), nil
+	})
+
+}
+
+// stepChecksum recomputes the SHA-256 from the bytes on disk (all backup types).
+func (e *Engine) stepChecksum(ctx context.Context, st *runState) {
+	b := st.backup
+	// 3. Checksum recomputed from the bytes on disk.
+	ok := e.step(ctx, st, StepChecksum, func(ctx context.Context) (string, error) {
+		sum, n, err := manifest.HashFile(st.artifact)
+		if err != nil {
+			return "", failure.New(failure.ArtifactMissing, "read artifact", err)
+		}
+		if n != b.SizeBytes || sum != b.SHA256 {
+			return "", failure.New(failure.ChecksumMismatch,
+				fmt.Sprintf("SHA-256 mismatch: expected %s, got %s", b.SHA256, sum), nil).
+				WithHint("the artifact is corrupted or was modified; do not rely on this backup")
+		}
+		return "sha256 " + sum, nil
+	})
+	st.rep.ChecksumResult = resultOf(ok, st)
+}
+
 func (st *runState) backupPath(r *repo.Repo, rel string) (string, error) {
 	if rel == "" {
 		return "", failure.New(failure.ArtifactMissing, "empty path in backup record", nil)
@@ -445,7 +465,7 @@ func (e *Engine) finish(parent context.Context, st *runState) (*report.Report, e
 		st.failErr = failure.New(failure.Timeout, fmt.Sprintf("verification exceeded timeout of %s", st.settings.Timeout.D()), st.failErr).
 			WithHint("increase verification.timeout or use --timeout")
 	}
-	rep.FinalStatus = Decide(rep.Steps, cancelled)
+	rep.FinalStatus = DecideFor(rep.Steps, cancelled, st.mandatory)
 	if rep.FinalStatus != metadata.VerifyVerified {
 		err := st.failErr
 		if err == nil && cancelled {
@@ -462,7 +482,11 @@ func (e *Engine) finish(parent context.Context, st *runState) (*report.Report, e
 	if rep.DetectedFailures == nil {
 		rep.DetectedFailures = []string{}
 	}
-	rep.Scope = buildScope(st)
+	if b := st.backup; b.BackupType == BackupTypeVolume {
+		rep.Scope = buildVolumeScope(st)
+	} else {
+		rep.Scope = buildScope(st)
+	}
 	rep.FinishedAt = time.Now().UTC()
 	rep.Objectives = report.Objectives{
 		ObservedRestoreDurationMS: st.restoreDur.Milliseconds(),

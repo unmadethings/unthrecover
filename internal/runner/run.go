@@ -102,8 +102,8 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *Summary {
 	}
 	defer unlock()
 
-	eng := &backup.Engine{Store: r.Store, Repo: r.Repo, Redactor: r.Redactor, Log: r.Log}
-	b, err := eng.RunPostgres(ctx, cfg)
+	eng := &backup.Engine{Store: r.Store, Repo: r.Repo, Redactor: r.Redactor, Log: r.Log, Docker: r.Docker}
+	b, err := eng.Run(ctx, cfg)
 	if b != nil {
 		sum.BackupID, sum.BackupStatus = b.ID, b.Status
 	}

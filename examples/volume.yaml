@@ -1,0 +1,18 @@
+# Unth Recover job: file-level backup of a Docker volume (see docs/DOCKER_VOLUME_BACKUP.md).
+version: 1
+source:
+  name: app-uploads
+  type: docker-volume
+  volume: myapp_uploads
+  consistency: offline        # refuse while a running container mounts the volume
+  # consistency: stop         # or: stop those containers during the copy, then restart them
+  helper_image: busybox:1.36.1
+  stop_timeout: 30s
+backup:
+  timeout: 1h
+verification:
+  image_pull: if-missing
+  timeout: 30m
+retention:
+  keep_last: 7
+  keep_weekly: 4

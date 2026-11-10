@@ -198,6 +198,10 @@ func removeTestContainers() {
 	for _, id := range strings.Fields(string(out)) {
 		_ = exec.Command("docker", "rm", "-f", "-v", id).Run()
 	}
+	out, _ = exec.Command("docker", "volume", "ls", "-q", "--filter", "label=io.unthrecover.test="+sessionLabel).Output()
+	for _, v := range strings.Fields(string(out)) {
+		_ = exec.Command("docker", "volume", "rm", "-f", v).Run()
+	}
 }
 
 // managedResources lists Docker resources labeled as created by unth

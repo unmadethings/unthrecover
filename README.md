@@ -93,6 +93,7 @@ unth run --config examples/backup.yaml   # what you schedule: backup + verify + 
 ```
 
 Scheduling, retention and notifications: [docs/SCHEDULING.md](docs/SCHEDULING.md).
+Docker volumes: [docs/DOCKER_VOLUME_BACKUP.md](docs/DOCKER_VOLUME_BACKUP.md) (`unth backup volume`).
 
 Walkthrough with a disposable demo database: [docs/QUICKSTART.md](docs/QUICKSTART.md).
 All commands: [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md).
@@ -105,13 +106,14 @@ All commands: [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md).
 - Isolated restore testing in Docker; JSON and text reports
 - Read-only discovery of Docker containers/volumes and PostgreSQL
 - Interrupted-operation recovery (`unth cleanup`)
+- Docker volume backups with consistency policies (`offline` / `stop`) and per-file verification in an isolated volume
 - Scheduled jobs: `unth run` (backup → verify → prune → notify) with systemd/cron templates
 - Retention policies (`unth prune`; the newest VERIFIED backup is never expired)
 - Webhook (HMAC-signed) and Slack notifications
 
 ## Not implemented yet
 
-Docker volume backups, S3-compatible storage, encryption, signed manifests, web UI,
+S3-compatible storage, encryption, signed manifests, web UI,
 production restore, multi-server. See [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md).
 Nothing in this list is partially present behind a flag.
 

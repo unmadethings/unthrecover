@@ -287,12 +287,15 @@ func newBackupCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if cfg.Source.Type != config.TypePostgres {
+				return &ExitError{Code: ExitUsage, Err: fmt.Errorf("source.type is %q; use `unth backup volume` for docker-volume sources", cfg.Source.Type)}
+			}
 			store, r, err := app.openStore(cmd.Context())
 			if err != nil {
 				return err
 			}
 			defer store.Close()
-			eng := &backup.Engine{Store: store, Repo: r, Redactor: app.Redactor, Log: app.Log}
+			eng := &backup.Engine{Store: store, Repo: r, Redactor: app.Redactor, Log: app.Log, Docker: dockerClient}
 			if format == "text" {
 				fmt.Fprintf(app.Out, "Backing up %s (%s@%s:%d/%s)...\n", cfg.Source.Name, cfg.Source.User, cfg.Source.Host, cfg.Source.Port, cfg.Source.Database)
 			}
@@ -401,7 +404,57 @@ func newBackupCmd(app *App) *cobra.Command {
 		},
 	}
 	show.Flags().StringVar(&showFormat, "format", "text", "output format: text|json")
-	cmd.AddCommand(pg, list, show)
+	var vCfg, vFormat string
+	vol := &cobra.Command{
+		Use:   "volume",
+		Short: "Create a file-level backup of a Docker volume (consistency: offline or stop)",
+		Long: `Backs up a Docker volume through the Docker archive API using a never-started helper
+container. consistency: offline (default) refuses if a running container mounts the volume;
+consistency: stop stops exactly those containers for the duration of the copy and starts them
+again afterwards (also on failure). A per-file manifest (type, mode, owner, size, SHA-256) is
+recorded and used by ` + "`unth verify`" + `.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := checkFormat(vFormat); err != nil {
+				return err
+			}
+			cfg, err := loadConfig(vCfg)
+			if err != nil {
+				return err
+			}
+			if cfg.Source.Type != config.TypeDockerVolume {
+				return &ExitError{Code: ExitUsage, Err: fmt.Errorf("source.type is %q; use `unth backup postgres` for PostgreSQL sources", cfg.Source.Type)}
+			}
+			store, r, err := app.openStore(cmd.Context())
+			if err != nil {
+				return err
+			}
+			defer store.Close()
+			eng := &backup.Engine{Store: store, Repo: r, Redactor: app.Redactor, Log: app.Log, Docker: dockerClient}
+			if vFormat == "text" {
+				fmt.Fprintf(app.Out, "Backing up volume %s (workload %s, consistency %s)...\n", cfg.Source.Volume, cfg.Source.Name, cfg.Source.Consistency)
+			}
+			b, err := eng.RunVolume(cmd.Context(), cfg)
+			if b != nil && vFormat == "json" {
+				_ = writeJSON(app.Out, backupView(b))
+			}
+			if b != nil && vFormat == "text" && b.Status == metadata.BackupCreated {
+				fmt.Fprintf(app.Out, "Backup created: %s\n  size:    %d bytes\n  sha256:  %s\n  status:  %s (not yet verified)\n", b.ID, b.SizeBytes, b.SHA256, b.Status)
+				if b.ErrorMessage != "" {
+					fmt.Fprintf(app.Out, "  %s\n", b.ErrorMessage)
+				}
+				fmt.Fprintf(app.Out, "\nNext: unth verify %s\n", b.ID)
+			}
+			if err != nil && errors.Is(err, context.Canceled) {
+				return &ExitError{Code: ExitCancelled, Err: err}
+			}
+			return err
+		},
+	}
+	vol.Flags().StringVarP(&vCfg, "config", "c", "", "job configuration file (required)")
+	vol.Flags().StringVar(&vFormat, "format", "text", "output format: text|json")
+	_ = vol.MarkFlagRequired("config")
+	cmd.AddCommand(pg, vol, list, show)
 	return cmd
 }
 

@@ -27,7 +27,7 @@ Status legend: ✅ done and tested · 🟡 partial · ⬜ not started. Updated w
 | `unth run` (lock → backup → verify → prune → notify) | ✅ integration tests (success, not-verified, notify failure, overlap) |
 | Retention (`unth prune`, EXPIRED) | ✅ unit (planner) + integration tests |
 | Scheduling (systemd service/timer, cron) | ✅ templates; `systemd-analyze verify` clean (except binary path not installed in the dev sandbox) |
-| Docker volume backup with consistency policies | ⬜ |
+| Docker volume backup with consistency policies | ✅ offline/stop policies, archive safety, isolated restore + file comparison; integration tests |
 | Install script with checksum verification | ⬜ |
 | CI matrix PostgreSQL 12–17 | ✅ (done during M0 hardening) |
 

@@ -81,3 +81,23 @@ func TestDecideCancelled(t *testing.T) {
 		t.Fatalf("cancelled: got %s", got)
 	}
 }
+
+func TestDecideForVolume(t *testing.T) {
+	var steps []report.Step
+	for _, n := range VolumeMandatorySteps {
+		steps = append(steps, report.Step{Name: n, Mandatory: true, Status: report.StepPass})
+	}
+	if got := DecideFor(steps, false, MandatoryFor(BackupTypeVolume)); got != metadata.VerifyVerified {
+		t.Fatalf("volume all pass: %s", got)
+	}
+	// A volume run can never satisfy the PostgreSQL list (and vice versa).
+	if got := DecideFor(steps, false, MandatoryFor("postgres-logical")); got != metadata.VerifyFailed {
+		t.Fatalf("volume steps verified a postgres backup: %s", got)
+	}
+	if got := DecideFor(steps[:len(steps)-1], false, VolumeMandatorySteps); got != metadata.VerifyFailed {
+		t.Fatalf("missing file_integrity: %s", got)
+	}
+	if got := DecideFor(steps, false, nil); got != metadata.VerifyFailed {
+		t.Fatalf("empty mandatory list must never verify: %s", got)
+	}
+}
