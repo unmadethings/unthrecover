@@ -3,7 +3,7 @@
 All notable changes are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning: [SemVer](https://semver.org/).
 
-## [0.2.0-alpha] — M1 (Self-hosted Community Edition) + M2 web panel preview
+## [0.2.0-alpha] — 2026-11-10 — M1 (Self-hosted Community Edition) + M2 web panel preview
 
 ### Added
 - `unth run`: scheduled job = per-job lock → backup → verify → retention → notify; exit code 4

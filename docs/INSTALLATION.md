@@ -79,7 +79,7 @@ group if it exists), `/var/lib/unthrecover` (0700) and `/etc/unth/jobs` (0750 ro
 It depends on `postgresql-client`; install a client whose major version is ≥ your servers.
 
 ```bash
-sha256sum -c SHA256SUMS --ignore-missing && sudo apt install ./unthrecover_0.2.0-alpha_amd64.deb
+sha256sum -c SHA256SUMS --ignore-missing && sudo apt install ./unthrecover_0.2.0.alpha_amd64.deb   # v0.2.0-alpha; from v0.2.1: unthrecover_<version>_<arch>.deb
 ```
 
 Removing the package never deletes backups (`/var/lib/unthrecover`) or job configs (`/etc/unth`).

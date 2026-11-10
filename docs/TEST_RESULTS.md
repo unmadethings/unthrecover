@@ -99,7 +99,7 @@ match → checksum PASS but run FAILED; plus `Decide()` unit tests).
 | Anonymous install from GitHub (public repo, `raw.githubusercontent.com` + release download) | **PASS** | manual check from the dev sandbox |
 
 
-## v0.2.0-alpha candidate (2026-11-10, local; CI run recorded after it completes)
+## v0.2.0-alpha candidate (2026-11-10, local; CI run #18 green on b5c73ce)
 
 | Area | Result | Test |
 |---|---|---|
@@ -118,3 +118,28 @@ match → checksum PASS but run FAILED; plus `Decide()` unit tests).
 Defects found by these tests and fixed: pg_restore 17 → PostgreSQL ≤16 `transaction_timeout`
 restore failure (version-matched tools); `.deb` packaged its root directory as 0700; two test
 assertion errors.
+
+## Release v0.2.0-alpha — build, publish and clean-machine test (2026-11-10)
+
+Release build: run #3 — https://github.com/unmadethings/unthrecover/actions/runs/42839089977 (commit b5c73ce; tests, govulncheck, binaries, `.deb` amd64/arm64, SHA256SUMS, multi-arch GHCR image).
+Clean-machine test: publish-release run #4 — https://github.com/unmadethings/unthrecover/actions/runs/42842743257
+
+| Check | Result |
+|---|---|
+| All published assets match `SHA256SUMS` (`sha256sum -c`) | **PASS** |
+| `scripts/install.sh --version v0.2.0-alpha` on a fresh runner; `version`, `doctor` | **PASS** |
+| Released binary: backup + verify on PostgreSQL 16 → VERIFIED; corrupted artifact → exit 3, never VERIFIED | **PASS** |
+| `unth run` twice with `keep_last: 1` → both VERIFIED, older one EXPIRED | **PASS** |
+| `unth serve`: API 401 without session, token login, overview shows a verified workload, token never in the server log | **PASS** |
+| `.deb` installed with `apt` on Ubuntu 24.04: `/usr/bin/unth` version, `unth` user, systemd units, data dir `700 unth` | **PASS** |
+| Container image pulled from GHCR (authenticated): `version`, PostgreSQL clients 13–17 present | **PASS** — anonymous pull depends on the package visibility setting |
+| No leftover managed resources | **PASS** |
+
+Defect found by this test and fixed (9ef5336): GitHub rewrites `~` in uploaded asset names
+(`unthrecover_0.2.0~alpha_amd64.deb` was published as `unthrecover_0.2.0.alpha_amd64.deb`), so
+`SHA256SUMS` listed missing files (publish-release run #3 failed:
+https://github.com/unmadethings/unthrecover/actions/runs/42841078024). The `.deb` file name now
+uses the tag (`unthrecover_0.2.0-alpha_amd64.deb`; the package version inside stays `0.2.0~alpha`).
+For v0.2.0-alpha the publish workflow renamed the two `SHA256SUMS` entries to the asset with the
+identical hash; no hash was recomputed. v0.2.0-alpha's `.deb` assets therefore keep the
+`0.2.0.alpha` spelling; later releases use the tag spelling.
