@@ -22,7 +22,7 @@ docker run --rm --network none --label io.unthrecover.test=rpm \
     test -f /usr/lib/systemd/system/unth@.timer
     test -f /usr/share/licenses/unthrecover/LICENSE
     /usr/bin/unth version
-    su -s /bin/sh unth -c "unth --data-dir /var/lib/unthrecover backup list" >/dev/null
+    chroot --userspec=unth:unth / /usr/bin/unth --data-dir /var/lib/unthrecover backup list >/dev/null  # coreutils; fedora minimal has no su
     rpm -e unthrecover
     test -d /var/lib/unthrecover || { echo "removal deleted backups dir"; exit 1; }
     test ! -e /usr/bin/unth
