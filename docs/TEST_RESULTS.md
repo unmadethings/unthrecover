@@ -132,7 +132,7 @@ Clean-machine test: publish-release run #4 — https://github.com/unmadethings/u
 | `unth run` twice with `keep_last: 1` → both VERIFIED, older one EXPIRED | **PASS** |
 | `unth serve`: API 401 without session, token login, overview shows a verified workload, token never in the server log | **PASS** |
 | `.deb` installed with `apt` on Ubuntu 24.04: `/usr/bin/unth` version, `unth` user, systemd units, data dir `700 unth` | **PASS** |
-| Container image pulled from GHCR (authenticated): `version`, PostgreSQL clients 13–17 present | **PASS** — anonymous pull depends on the package visibility setting |
+| Container image pulled from GHCR (authenticated): `version`, PostgreSQL clients 13–17 present | **PASS**; package made public 2026-11-10, anonymous manifest fetch for `v0.2.0-alpha` → 200 |
 | No leftover managed resources | **PASS** |
 
 Defect found by this test and fixed (9ef5336): GitHub rewrites `~` in uploaded asset names

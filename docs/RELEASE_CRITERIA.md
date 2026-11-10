@@ -31,7 +31,7 @@ The alpha must not be advertised as production-ready.
 | Clean-machine test of the published release (install, recovery proof, corruption, scheduled run + retention, panel login, `.deb` on Ubuntu, GHCR image) | ✅ publish-release run #4 |
 | Defects found during release fixed | ✅ asset names vs SHA256SUMS (9ef5336) |
 | Published as pre-release | ✅ 2026-11-10 |
-| Open: GHCR package public (anonymous `docker pull`), private vulnerability reporting enabled | ⏳ repository admin |
+| GHCR package public, private vulnerability reporting enabled | ✅ 2026-11-10 |
 
 ## `v1.0.0` additionally requires
 Load tests with large databases, documented recovery scenarios, an external security audit,
