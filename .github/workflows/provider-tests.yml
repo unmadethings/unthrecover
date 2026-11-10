@@ -1,0 +1,60 @@
+name: Provider tests
+
+# Offsite copies against REAL providers (Google Cloud Storage / any S3, Google
+# Drive / any rclone remote). Run manually. Credentials come only from
+# repository secrets; a provider without secrets is reported as NOT RUN.
+# The tests write under a random prefix/folder and delete it at the end.
+#
+# Secrets (Settings -> Secrets and variables -> Actions):
+#   S3 / Google Cloud Storage: UNTH_TEST_S3_ENDPOINT, UNTH_TEST_S3_BUCKET,
+#     UNTH_TEST_S3_ACCESS_KEY, UNTH_TEST_S3_SECRET_KEY (optional UNTH_TEST_S3_REGION)
+#   rclone / Google Drive: UNTH_TEST_RCLONE_CONF_B64 (base64 of an rclone.conf),
+#     UNTH_TEST_RCLONE_REMOTE (e.g. gdrive:unth-ci)
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  providers:
+    runs-on: ubuntu-24.04
+    env:
+      UNTH_TEST_SOURCE_IMAGE: postgres:16-alpine
+      UNTH_TEST_RESTORE_IMAGE: postgres:16-alpine
+      UNTH_TEST_S3_ENDPOINT: ${{ secrets.UNTH_TEST_S3_ENDPOINT }}
+      UNTH_TEST_S3_BUCKET: ${{ secrets.UNTH_TEST_S3_BUCKET }}
+      UNTH_TEST_S3_ACCESS_KEY: ${{ secrets.UNTH_TEST_S3_ACCESS_KEY }}
+      UNTH_TEST_S3_SECRET_KEY: ${{ secrets.UNTH_TEST_S3_SECRET_KEY }}
+      UNTH_TEST_S3_REGION: ${{ secrets.UNTH_TEST_S3_REGION }}
+      UNTH_TEST_RCLONE_REMOTE: ${{ secrets.UNTH_TEST_RCLONE_REMOTE }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: PostgreSQL 16 client tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+      - name: rclone (pinned, checksum-verified)
+        run: sudo sh scripts/install-rclone.sh
+      - name: rclone configuration from secret
+        env:
+          CONF_B64: ${{ secrets.UNTH_TEST_RCLONE_CONF_B64 }}
+        run: |
+          if [ -n "$CONF_B64" ]; then
+            umask 077
+            printf '%s' "$CONF_B64" | base64 -d > "$RUNNER_TEMP/rclone.conf"
+            echo "UNTH_TEST_RCLONE_CONFIG=$RUNNER_TEMP/rclone.conf" >> "$GITHUB_ENV"
+          fi
+      - name: Which providers are configured
+        run: |
+          [ -n "$UNTH_TEST_S3_BUCKET" ] && echo "S3: configured ($UNTH_TEST_S3_ENDPOINT)" || echo "S3: NOT RUN (no secrets)"
+          [ -n "$UNTH_TEST_RCLONE_REMOTE" ] && echo "rclone: configured (remote type: $(echo "$UNTH_TEST_RCLONE_REMOTE" | cut -d: -f1))" || echo "rclone: NOT RUN (no secrets)"
+      - name: Provider tests
+        run: go test -tags integration -count=1 -timeout 30m -v -run 'TestOffsiteReal' ./tests/integration/...
+      - name: Remove rclone configuration
+        if: always()
+        run: rm -f "$RUNNER_TEMP/rclone.conf"
