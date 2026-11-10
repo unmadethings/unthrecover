@@ -100,7 +100,21 @@ type Source struct {
 	PasswordFile   string   `yaml:"password_file"`
 	SSLMode        string   `yaml:"sslmode"`
 	ConnectTimeout Duration `yaml:"connect_timeout"`
+
+	// type: docker-volume
+	Volume      string   `yaml:"volume"`
+	Consistency string   `yaml:"consistency"`  // offline (default) | stop
+	HelperImage string   `yaml:"helper_image"` // image for never-started mount containers
+	StopTimeout Duration `yaml:"stop_timeout"` // graceful stop timeout (consistency: stop)
 }
+
+// Source types and volume consistency policies.
+const (
+	TypePostgres       = "postgres"
+	TypeDockerVolume   = "docker-volume"
+	ConsistencyOffline = "offline"
+	ConsistencyStop    = "stop"
+)
 
 // Backup holds backup execution settings.
 type Backup struct {
@@ -139,6 +153,8 @@ const (
 var (
 	namePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
 	envPattern  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	// volumePattern matches Docker's volume name rules.
+	volumePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,254}$`)
 	// imagePattern is intentionally conservative: registry/repo:tag or @digest.
 	imagePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._/:-]*(@sha256:[a-f0-9]{64})?$`)
 	validSSL     = map[string]bool{"disable": true, "allow": true, "prefer": true, "require": true, "verify-ca": true, "verify-full": true}
@@ -186,13 +202,24 @@ func (c *Config) ApplyDefaults() {
 	if c.Source.Type == "" {
 		c.Source.Type = "postgres"
 	}
-	if c.Source.Port == 0 {
+	if c.Source.Type == TypeDockerVolume {
+		if c.Source.Consistency == "" {
+			c.Source.Consistency = ConsistencyOffline
+		}
+		if c.Source.HelperImage == "" {
+			c.Source.HelperImage = "busybox:1.36.1"
+		}
+		if c.Source.StopTimeout == 0 {
+			c.Source.StopTimeout = Duration(30 * time.Second)
+		}
+	}
+	if c.Source.Port == 0 && c.Source.Type == TypePostgres {
 		c.Source.Port = 5432
 	}
-	if c.Source.SSLMode == "" {
+	if c.Source.SSLMode == "" && c.Source.Type == TypePostgres {
 		c.Source.SSLMode = "prefer"
 	}
-	if c.Source.ConnectTimeout == 0 {
+	if c.Source.ConnectTimeout == 0 && c.Source.Type == TypePostgres {
 		c.Source.ConnectTimeout = Duration(10 * time.Second)
 	}
 	if c.Backup.Timeout == 0 {
@@ -246,29 +273,30 @@ func (c *Config) Validate() error {
 	if !namePattern.MatchString(s.Name) {
 		add("source.name: required, letters/digits/._- only, max 63 chars")
 	}
-	if s.Type != "postgres" {
-		add("source.type: only \"postgres\" is supported in this release")
-	}
-	if s.Host == "" || strings.ContainsAny(s.Host, " \t\n/") && !strings.HasPrefix(s.Host, "/") {
-		add("source.host: required")
-	}
-	if s.Port < 1 || s.Port > 65535 {
-		add("source.port: must be 1-65535")
-	}
-	if s.Database == "" || strings.ContainsAny(s.Database, "\x00\n") {
-		add("source.database: required")
-	}
-	if s.User == "" || strings.ContainsAny(s.User, "\x00\n") {
-		add("source.user: required")
-	}
-	if s.PasswordEnv != "" && s.PasswordFile != "" {
-		add("source: set only one of password_env or password_file")
-	}
-	if s.PasswordEnv != "" && !envPattern.MatchString(s.PasswordEnv) {
-		add("source.password_env: invalid environment variable name")
-	}
-	if !validSSL[s.SSLMode] {
-		add("source.sslmode: invalid value %q", s.SSLMode)
+	switch s.Type {
+	case TypePostgres:
+		validatePostgresSource(s, add)
+	case TypeDockerVolume:
+		if !volumePattern.MatchString(s.Volume) {
+			add("source.volume: required Docker volume name")
+		}
+		if s.Consistency != ConsistencyOffline && s.Consistency != ConsistencyStop {
+			add("source.consistency: must be offline or stop")
+		}
+		if !imagePattern.MatchString(s.HelperImage) {
+			add("source.helper_image: invalid image reference")
+		}
+		if s.StopTimeout.D() < time.Second || s.StopTimeout.D() > 10*time.Minute {
+			add("source.stop_timeout: must be between 1s and 10m")
+		}
+		if s.Host != "" || s.Database != "" || s.User != "" || s.PasswordEnv != "" || s.PasswordFile != "" {
+			add("source: host/database/user/password_* are not used by type docker-volume")
+		}
+		if len(c.Verification.Queries) > 0 {
+			add("verification.queries: not supported for type docker-volume")
+		}
+	default:
+		add("source.type: must be %q or %q", TypePostgres, TypeDockerVolume)
 	}
 	if c.Backup.Timeout.D() < time.Second {
 		add("backup.timeout: must be at least 1s")
@@ -315,6 +343,33 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid config:\n  - %s", strings.Join(errs, "\n  - "))
 	}
 	return nil
+}
+
+func validatePostgresSource(s Source, add func(string, ...any)) {
+	if s.Host == "" || strings.ContainsAny(s.Host, " \t\n/") && !strings.HasPrefix(s.Host, "/") {
+		add("source.host: required")
+	}
+	if s.Port < 1 || s.Port > 65535 {
+		add("source.port: must be 1-65535")
+	}
+	if s.Database == "" || strings.ContainsAny(s.Database, "\x00\n") {
+		add("source.database: required")
+	}
+	if s.User == "" || strings.ContainsAny(s.User, "\x00\n") {
+		add("source.user: required")
+	}
+	if s.PasswordEnv != "" && s.PasswordFile != "" {
+		add("source: set only one of password_env or password_file")
+	}
+	if s.PasswordEnv != "" && !envPattern.MatchString(s.PasswordEnv) {
+		add("source.password_env: invalid environment variable name")
+	}
+	if !validSSL[s.SSLMode] {
+		add("source.sslmode: invalid value %q", s.SSLMode)
+	}
+	if s.Volume != "" || s.Consistency != "" {
+		add("source: volume/consistency are only used by type docker-volume")
+	}
 }
 
 // Validate checks verification settings.
@@ -387,5 +442,6 @@ func (s Source) Redacted() map[string]any {
 		"name": s.Name, "type": s.Type, "host": s.Host, "port": s.Port,
 		"database": s.Database, "user": s.User, "sslmode": s.SSLMode,
 		"password_env": s.PasswordEnv, "password_file": s.PasswordFile,
+		"volume": s.Volume, "consistency": s.Consistency,
 	}
 }

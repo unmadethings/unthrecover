@@ -145,6 +145,11 @@ func envErr(msg string, err error) error {
 	return failure.New(failure.EnvironmentFailed, msg, err)
 }
 
+// EnsureImage makes sure an image is present according to the pull policy.
+func EnsureImage(ctx context.Context, dc *docker.Client, image, policy string) error {
+	return ensureImage(ctx, dc, image, policy)
+}
+
 func ensureImage(ctx context.Context, dc *docker.Client, image, policy string) error {
 	exists, err := dc.ImageExists(ctx, image)
 	if err != nil {

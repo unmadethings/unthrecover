@@ -488,3 +488,136 @@ func demux(r io.Reader) string {
 	}
 	return buf.String()
 }
+
+// streamRaw sends an arbitrary body and returns the raw response.
+func (c *Client) streamRaw(ctx context.Context, method, path string, query url.Values, body io.Reader, contentType string) (*http.Response, error) {
+	if err := c.ensureVersion(ctx); err != nil {
+		return nil, err
+	}
+	u := "http://docker/v" + c.apiVersion + path
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, body)
+	if err != nil {
+		return nil, err
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, &AccessError{Host: c.host, Err: err}
+	}
+	if resp.StatusCode >= 400 {
+		defer resp.Body.Close()
+		var ae apiError
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+		_ = json.Unmarshal(b, &ae)
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, fmt.Errorf("%w: %s", ErrNotFound, ae.Message)
+		}
+		return nil, fmt.Errorf("docker %s %s: HTTP %d: %s", method, path, resp.StatusCode, ae.Message)
+	}
+	return resp, nil
+}
+
+// InspectVolume returns a volume by name.
+func (c *Client) InspectVolume(ctx context.Context, name string) (*Volume, error) {
+	var v Volume
+	if err := c.do(ctx, http.MethodGet, "/volumes/"+url.PathEscape(name), nil, nil, &v, true); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// ContainersUsingVolume lists all containers (any state) that mount the volume.
+func (c *Client) ContainersUsingVolume(ctx context.Context, volume string) ([]ContainerSummary, error) {
+	f, _ := json.Marshal(map[string][]string{"volume": {volume}})
+	var out []ContainerSummary
+	err := c.do(ctx, http.MethodGet, "/containers/json", url.Values{"all": {"1"}, "filters": {string(f)}}, nil, &out, true)
+	return out, err
+}
+
+// StopContainer stops a container, waiting up to timeoutSec before killing it.
+func (c *Client) StopContainer(ctx context.Context, id string, timeoutSec int) error {
+	err := c.do(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/stop",
+		url.Values{"t": {strconv.Itoa(timeoutSec)}}, nil, nil, true)
+	if err != nil && strings.Contains(err.Error(), "HTTP 304") {
+		return nil // already stopped
+	}
+	return err
+}
+
+// HelperSpec describes a never-started container used only as a mount point
+// for the archive API (no process runs, no network).
+type HelperSpec struct {
+	Name     string
+	Image    string
+	Labels   map[string]string
+	Volume   string
+	ReadOnly bool
+}
+
+// CreateHelper creates a container that mounts Volume at /data. It is never started.
+func (c *Client) CreateHelper(ctx context.Context, s HelperSpec) (string, error) {
+	body := map[string]any{
+		"Image":           s.Image,
+		"Cmd":             []string{"true"},
+		"Labels":          s.Labels,
+		"NetworkDisabled": true,
+		"HostConfig": map[string]any{
+			"NetworkMode":   "none",
+			"CapDrop":       []string{"ALL"},
+			"SecurityOpt":   []string{"no-new-privileges:true"},
+			"RestartPolicy": map[string]any{"Name": "no"},
+			"Mounts":        []map[string]any{{"Type": "volume", "Source": s.Volume, "Target": "/data", "ReadOnly": s.ReadOnly}},
+		},
+	}
+	var out struct {
+		ID string `json:"Id"`
+	}
+	err := c.do(ctx, http.MethodPost, "/containers/create", url.Values{"name": {s.Name}}, body, &out, true)
+	return out.ID, err
+}
+
+// ArchiveFrom streams a tar archive of path inside the container.
+func (c *Client) ArchiveFrom(ctx context.Context, id, path string) (io.ReadCloser, error) {
+	resp, err := c.streamRaw(ctx, http.MethodGet, "/containers/"+url.PathEscape(id)+"/archive", url.Values{"path": {path}}, nil, "")
+	if err != nil {
+		return nil, err
+	}
+	return resp.Body, nil
+}
+
+// ArchiveTo extracts a tar archive into dir inside the container. Extraction
+// is performed by the Docker daemon into the container's filesystem/volumes,
+// never on the host filesystem by unth.
+func (c *Client) ArchiveTo(ctx context.Context, id, dir string, tarStream io.Reader) error {
+	resp, err := c.streamRaw(ctx, http.MethodPut, "/containers/"+url.PathEscape(id)+"/archive",
+		url.Values{"path": {dir}, "noOverwriteDirNonDir": {"true"}}, tarStream, "application/x-tar")
+	if err != nil {
+		return err
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	return resp.Body.Close()
+}
+
+// ClassifyImage returns a coarse workload kind for an image reference.
+func ClassifyImage(image string) string {
+	img := strings.ToLower(image)
+	for _, k := range []struct{ sub, kind string }{
+		{"postgis", "postgres"}, {"timescale", "postgres"}, {"postgres", "postgres"},
+		{"mariadb", "mysql"}, {"mysql", "mysql"}, {"mongo", "mongodb"},
+		{"redis", "redis"}, {"valkey", "redis"}, {"elasticsearch", "elasticsearch"},
+		{"clickhouse", "clickhouse"}, {"influxdb", "influxdb"}, {"cassandra", "cassandra"},
+	} {
+		if strings.Contains(img, k.sub) {
+			return k.kind
+		}
+	}
+	return "generic"
+}

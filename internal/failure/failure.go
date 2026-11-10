@@ -35,6 +35,9 @@ const (
 	Timeout             Category = "TIMEOUT"
 	Cancelled           Category = "CANCELLED"
 	Interrupted         Category = "INTERRUPTED"
+	SourceNotFound      Category = "SOURCE_NOT_FOUND"
+	ConsistencyUnsafe   Category = "CONSISTENCY_UNSAFE"
+	FileMismatch        Category = "FILE_MISMATCH"
 	Internal            Category = "INTERNAL_ERROR"
 )
 

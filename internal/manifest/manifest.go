@@ -20,6 +20,7 @@ import (
 
 	"github.com/unmadethings/unthrecover/internal/config"
 	"github.com/unmadethings/unthrecover/internal/postgres"
+	"github.com/unmadethings/unthrecover/internal/volume"
 )
 
 // FormatVersion is the manifest schema version.
@@ -33,6 +34,9 @@ const FileName = "manifest.json"
 
 // ArtifactName is the artifact file name inside a backup directory.
 const ArtifactName = "artifact.dump"
+
+// VolumeArtifactName is the artifact name of docker-volume backups.
+const VolumeArtifactName = "volume.tar"
 
 // Artifact describes the backup payload.
 type Artifact struct {
@@ -67,7 +71,9 @@ type Manifest struct {
 	DumpToolVersion   string                `json:"dump_tool_version"`
 	Artifact          Artifact              `json:"artifact"`
 	FingerprintDigest string                `json:"fingerprint_digest"`
-	Fingerprint       *postgres.Fingerprint `json:"fingerprint"`
+	Fingerprint       *postgres.Fingerprint `json:"fingerprint,omitempty"`
+	VolumeFiles       *volume.FileManifest  `json:"volume_files,omitempty"`
+	Warnings          []string              `json:"warnings,omitempty"`
 	Verification      config.Verification   `json:"verification_settings"`
 	Integrity         Integrity             `json:"integrity"`
 }

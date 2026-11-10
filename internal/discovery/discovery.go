@@ -42,20 +42,7 @@ type DockerInventory struct {
 	Volumes       []VolumeInfo    `json:"volumes"`
 }
 
-var dbImages = map[string]string{
-	"postgres": "postgres", "postgis": "postgres", "timescale": "postgres", "supabase/postgres": "postgres",
-	"mysql": "mysql", "mariadb": "mysql", "mongo": "mongodb", "redis": "redis", "valkey": "redis",
-}
-
-func classify(image string) string {
-	img := strings.ToLower(image)
-	for k, v := range dbImages {
-		if strings.Contains(img, k) {
-			return v
-		}
-	}
-	return "generic"
-}
+func classify(image string) string { return docker.ClassifyImage(image) }
 
 // Docker inventories containers and volumes (read-only).
 func Docker(ctx context.Context, dc *docker.Client) (*DockerInventory, error) {
@@ -91,7 +78,7 @@ func Docker(ctx context.Context, dc *docker.Client) (*DockerInventory, error) {
 		case ci.Kind != "generic":
 			ci.Assessment = "not supported in this release (" + ci.Kind + ")"
 		default:
-			ci.Assessment = "not supported in this release (Docker volume backup planned for M1)"
+			ci.Assessment = "no direct backup; back up its volumes with `type: docker-volume`"
 		}
 		inv.Containers = append(inv.Containers, ci)
 	}
@@ -105,9 +92,9 @@ func Docker(ctx context.Context, dc *docker.Client) (*DockerInventory, error) {
 		case v.Labels[docker.LabelManaged] == "true":
 			vi.Assessment = "temporary Unth Recover verification resource"
 		case dbVolumes[v.Name]:
-			vi.Assessment = "database data volume: copying files of a running database is NOT a consistent backup; use a logical backup"
+			vi.Assessment = "database data volume: prefer a logical backup; file-level backup only with consistency: stop"
 		default:
-			vi.Assessment = "not supported in this release (Docker volume backup planned for M1)"
+			vi.Assessment = "supported: `type: docker-volume` (consistency: offline or stop)"
 		}
 		inv.Volumes = append(inv.Volumes, vi)
 	}
