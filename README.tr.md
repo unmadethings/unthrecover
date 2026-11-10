@@ -82,7 +82,7 @@ Komut referansı (İngilizce): [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)
 - Webhook (HMAC imzalı) ve Slack bildirimleri
 - Coolify, Dokploy ve Docker Compose: `unth discover jobs` bu platformların PostgreSQL veritabanlarını bulur ve gözden geçirilmeye hazır iş dosyaları yazar; parolalar asla okunmaz ([docs/COOLIFY_DOKPLOY.md](docs/COOLIFY_DOKPLOY.md), İngilizce)
 - Web yönetim paneli (`unth serve`): genel bakış, iş yükleri, kurtarma adımlarıyla yedekler, raporlar, etkinlik kaydı; token ile giriş, loopback dışında TLS zorunlu
-- **Uzak kopyalar**: S3 uyumlu depolama (AWS S3, Google Cloud Storage, Cloudflare R2, Backblaze B2, MinIO, …) veya rclone ile Google Drive, OneDrive, Dropbox, SFTP vb. Kopyalar yüklenmeden önce age ile şifrelenir, Ed25519 ile imzalanır, her yüklemeden sonra geri indirilip doğrulanır; ayrı saklama politikası ve felaket senaryosu için `unth offsite fetch` ([docs/OFFSITE.md](docs/OFFSITE.md), İngilizce)
+- **Uzak kopyalar**: S3 uyumlu depolama (AWS S3, Google Cloud Storage, Cloudflare R2, Backblaze B2, MinIO, …) panelden Google'ın kendi giriş sayfasıyla bağlanan **kendi Google Drive'ınız** veya rclone ile OneDrive, Dropbox, SFTP vb. Kopyalar yüklenmeden önce age ile şifrelenir, Ed25519 ile imzalanır, her yüklemeden sonra geri indirilip doğrulanır; ayrı saklama politikası ve felaket senaryosu için `unth offsite fetch` ([docs/OFFSITE.md](docs/OFFSITE.md), İngilizce)
 - Paketler: `.deb`, `.rpm`, Docker Compose dosyası, konteyner imajı (`ghcr.io/unmadethings/unthrecover`), kurulum betiği
 
 ## Henüz geliştirilmeyenler

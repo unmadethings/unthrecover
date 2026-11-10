@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/unmadethings/unthrecover/internal/buildinfo"
+	"github.com/unmadethings/unthrecover/internal/connections"
 	"github.com/unmadethings/unthrecover/internal/docker"
 	"github.com/unmadethings/unthrecover/internal/metadata"
 	"github.com/unmadethings/unthrecover/internal/repo"
@@ -63,8 +64,11 @@ type Server struct {
 	// declared that a reverse proxy terminates TLS (Coolify, Dokploy, Traefik, Caddy).
 	BehindProxy bool
 	Now         func() time.Time
+	// Google is the OAuth client for "Connect Google Drive" (default: connections.DefaultGoogle()).
+	Google *connections.Google
 
 	mu        sync.Mutex
+	oauth     map[string]*pendingOAuth
 	sessions  map[string]time.Time
 	failures  map[string][]time.Time
 	verifying map[string]bool
@@ -117,6 +121,7 @@ func (s *Server) Handler(bg context.Context) http.Handler {
 	s.sessions = map[string]time.Time{}
 	s.failures = map[string][]time.Time{}
 	s.verifying = map[string]bool{}
+	s.oauth = map[string]*pendingOAuth{}
 	s.bgCtx = bg
 
 	mux := http.NewServeMux()
@@ -132,6 +137,10 @@ func (s *Server) Handler(bg context.Context) http.Handler {
 	mux.HandleFunc("GET /api/runs/{id}/report", s.auth(s.getReport))
 	mux.HandleFunc("GET /api/audit", s.auth(s.audit))
 	mux.HandleFunc("GET /api/info", s.auth(s.info))
+	mux.HandleFunc("GET /api/connections", s.auth(s.listConnections))
+	mux.HandleFunc("POST /api/connections/gdrive", s.auth(s.startGDrive))
+	mux.HandleFunc("DELETE /api/connections/{name}", s.auth(s.deleteConnection))
+	mux.HandleFunc("GET "+oauthCallbackPath, s.googleCallback)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not found")
 	})

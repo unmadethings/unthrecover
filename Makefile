@@ -5,7 +5,8 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.1.
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 PKG     := github.com/unmadethings/unthrecover/internal/buildinfo
-LDFLAGS := -s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).Date=$(DATE)
+LDFLAGS := -s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).Date=$(DATE) \
+	-X $(PKG).GoogleClientID=$(UNTH_GOOGLE_CLIENT_ID) -X $(PKG).GoogleClientSecret=$(UNTH_GOOGLE_CLIENT_SECRET)
 
 .PHONY: all build test test-race test-integration test-install lint vuln sec check dist deb image web clean
 

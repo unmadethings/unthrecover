@@ -7,6 +7,7 @@ With an `offsite:` section, `unth run` copies every **VERIFIED** backup to stora
 | Target | `type` | Examples |
 |---|---|---|
 | S3-compatible object storage | `s3` | AWS S3, **Google Cloud Storage**, Cloudflare R2, Backblaze B2, Wasabi, Hetzner Object Storage, DigitalOcean Spaces, MinIO, SeaweedFS, Garage |
+| **Google Drive**, connected in the panel | `gdrive` | your own Drive, OAuth in the browser |
 | File storage / cloud drives through [rclone](https://rclone.org) | `rclone` | **Google Drive**, OneDrive, Dropbox, Box, pCloud, Mega, SFTP, WebDAV, Nextcloud, … (70+ providers) |
 
 Object storage is the better choice for servers (service accounts, lifecycle rules, object
@@ -102,7 +103,40 @@ Encryption is mandatory for offsite copies. Plaintext copies need `offsite.allow
 `unth` never creates buckets. `http://` is accepted for loopback addresses only, unless
 `allow_http: true` (trusted internal network; data is still encrypted and requests are signed).
 
-## 2c. Google Drive (and other drives) via rclone
+## 2c. Google Drive — connect in the panel (recommended)
+
+Each user connects **their own** Google Drive; nothing to install, no rclone, no desktop app.
+
+1. Open the panel (`unth serve`) at `http://127.0.0.1:8484`. For a remote server, use an SSH
+   tunnel from your computer: `ssh -L 8484:127.0.0.1:8484 your-server`, then open
+   `http://127.0.0.1:8484` in your browser.
+2. **Settings → Connections → Connect Google Drive.** Google's own sign-in page opens; choose
+   the account and click **Allow**. You come back to the panel: *connected as "gdrive"*.
+3. Job configuration:
+   ```yaml
+   offsite:
+     type: gdrive
+     connection: gdrive
+   ```
+
+What unth can access: only the files it creates itself (Google's `drive.file` permission) —
+they are in the folder **Unth Recover Backups**. The rest of your Drive is invisible to it.
+Your Google password is never seen by unth (Google does not allow apps to sign in with it).
+The access token is stored on your server only (`<data-dir>/connections/gdrive.json`, 0600),
+never shown by the panel and never sent anywhere but Google. **Disconnect** in the panel revokes
+it at Google; you can also remove "Unth Recover" in your Google account's security settings.
+
+On a new machine after a disaster, connect the same Google account again: unth finds the
+existing *Unth Recover Backups* folder, and `unth offsite fetch` brings copies back.
+
+The project's OAuth client is built into release binaries. Self-built binaries, or
+organizations that want their own name on Google's consent screen, set
+`UNTH_GOOGLE_CLIENT_ID` and `UNTH_GOOGLE_CLIENT_SECRET` (a Google Cloud "Desktop app" OAuth
+client with the Drive API enabled; publish it "In production" so tokens do not expire after 7
+days). A panel reached only through a domain needs an own "Web application" client with
+`UNTH_GOOGLE_REDIRECT_URL=https://<panel>/oauth/google/callback` — or the SSH tunnel above.
+
+## 2d. Google Drive and other drives via rclone
 
 1. Install rclone on the server (`sudo sh scripts/install-rclone.sh` installs the pinned,
    checksum-verified release; the container image already contains it).
@@ -165,6 +199,9 @@ fetch on an empty data directory followed by a real isolated restore that must b
 | The provider keeps the copy later (durability, deletion by others) | ❌ use bucket versioning / object lock / provider retention; `unth offsite check` re-proves on demand |
 | The offline recovery key still works | ❌ test it yourself from time to time (`fetch` on a spare machine) |
 
-Tested against: SeaweedFS 3.97 (S3 API, CI), rclone 1.75.2 with a local-storage remote (CI).
+Tested against: SeaweedFS 3.97 (S3 API, CI), rclone 1.75.2 with a local-storage remote (CI), and a
+protocol-faithful fake of Google OAuth + Drive v3 (PKCE, single-use codes, token refresh,
+revocation, resumable uploads, drive.file visibility), including a browser click on
+"Connect Google Drive" (CI).
 Not yet tested by the project against real Google Cloud Storage, AWS S3 or Google Drive
 accounts — reports welcome.

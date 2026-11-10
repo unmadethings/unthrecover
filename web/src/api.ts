@@ -94,6 +94,8 @@ export type Report = {
 
 export type AuditEvent = { id: number; at: string; actor: string; action: string; target: string; outcome: string; details: string };
 
+export type Connection = { name: string; provider: string; account: string; created_at: string };
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -121,6 +123,10 @@ export const api = {
   session: () => call<{ authenticated: boolean; version: string }>("GET", "/api/session"),
   login: (token: string) => call<{ authenticated: boolean }>("POST", "/api/login", { token }),
   logout: () => call<{ authenticated: boolean }>("POST", "/api/logout", {}),
+  connections: () => call<{ google_configured: boolean; connections: Connection[] }>("GET", "/api/connections"),
+  connectGDrive: () => call<{ auth_url: string }>("POST", "/api/connections/gdrive", {}),
+  disconnect: (name: string) =>
+    call<{ deleted: boolean; revoked: boolean }>("DELETE", "/api/connections/" + encodeURIComponent(name)),
   overview: () => call<Overview>("GET", "/api/overview"),
   backups: (workload?: string) =>
     call<Backup[]>("GET", "/api/backups" + (workload ? "?workload=" + encodeURIComponent(workload) : "")),

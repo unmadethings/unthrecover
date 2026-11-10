@@ -113,7 +113,7 @@ All commands: [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md).
 - Webhook (HMAC-signed) and Slack notifications
 - Coolify, Dokploy and Docker Compose: `unth discover jobs` writes ready-to-review jobs for their PostgreSQL databases ([docs/COOLIFY_DOKPLOY.md](docs/COOLIFY_DOKPLOY.md))
 - Web management panel (`unth serve`): overview, workloads, backups with the recovery pipeline, reports, activity log; token login, TLS required off-loopback
-- **Offsite copies** to S3-compatible storage (AWS S3, Google Cloud Storage, Cloudflare R2, Backblaze B2, MinIO, …) or any rclone remote (Google Drive, OneDrive, Dropbox, SFTP, …): encrypted with age before upload, Ed25519-signed, downloaded again and proven after every upload, own retention, disaster-recovery `fetch` ([docs/OFFSITE.md](docs/OFFSITE.md))
+- **Offsite copies** to S3-compatible storage (AWS S3, Google Cloud Storage, Cloudflare R2, Backblaze B2, MinIO, …) your own **Google Drive connected in the panel** with Google's sign-in page, or any rclone remote (OneDrive, Dropbox, SFTP, …): encrypted with age before upload, Ed25519-signed, downloaded again and proven after every upload, own retention, disaster-recovery `fetch` ([docs/OFFSITE.md](docs/OFFSITE.md))
 - Packages: `.deb`, `.rpm`, Docker Compose file, container image (`ghcr.io/unmadethings/unthrecover`), install script
 
 ## Not implemented yet

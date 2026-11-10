@@ -82,3 +82,20 @@ func TestOffsiteRejects(t *testing.T) {
 		t.Fatalf("message: %v", err)
 	}
 }
+
+func TestOffsiteGDrive(t *testing.T) {
+	if _, err := Parse([]byte(offsiteBase + "offsite:\n  type: gdrive\n  connection: gdrive\n")); err != nil {
+		t.Fatal(err)
+	}
+	for name, raw := range map[string]string{
+		"no connection":        offsiteBase + "offsite:\n  type: gdrive\n",
+		"bad connection name":  offsiteBase + "offsite:\n  type: gdrive\n  connection: ../x\n",
+		"gdrive with bucket":   offsiteBase + "offsite:\n  type: gdrive\n  connection: gdrive\n  bucket: b1x\n",
+		"s3 with connection":   offsiteBase + "offsite:\n  type: s3\n  bucket: bk1\n  access_key_env: A\n  secret_key_env: S\n  connection: gdrive\n",
+		"gdrive without crypt": valid + "offsite:\n  type: gdrive\n  connection: gdrive\n",
+	} {
+		if _, err := Parse([]byte(raw)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

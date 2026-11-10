@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/unmadethings/unthrecover/internal/config"
+	"github.com/unmadethings/unthrecover/internal/connections"
 	"github.com/unmadethings/unthrecover/internal/failure"
 	"github.com/unmadethings/unthrecover/internal/metadata"
 	"github.com/unmadethings/unthrecover/internal/repo"
@@ -23,6 +24,8 @@ func OpenBackend(ctx context.Context, o config.Offsite) (Backend, error) {
 				WithHint("check offsite.endpoint, offsite.bucket, the access keys and network access to the endpoint")
 		}
 		return s, nil
+	case config.OffsiteGDrive:
+		return nil, fmt.Errorf("offsite: type gdrive needs the data directory (use Open)")
 	case config.OffsiteRclone:
 		r, err := NewRclone(o)
 		if err != nil {
@@ -46,8 +49,18 @@ func Open(ctx context.Context, cfg *config.Config, store *metadata.Store, r *rep
 	if err != nil {
 		return nil, failure.New(failure.ConfigInvalid, "keys", err)
 	}
-	be, err := OpenBackend(ctx, cfg.Offsite)
-	if err != nil {
+	var be Backend
+	if cfg.Offsite.Type == config.OffsiteGDrive {
+		gd, gerr := NewGDrive(connections.DefaultGoogle(), connections.NewStore(r.Root), cfg.Offsite.Connection)
+		if gerr != nil {
+			return nil, failure.New(failure.ConfigInvalid, "offsite", gerr)
+		}
+		if gerr := gd.Check(ctx); gerr != nil {
+			return nil, failure.New(failure.OffsiteFailed, "google drive", gerr).
+				WithHint("check the connection in the panel (Settings → Connections); connect Google Drive again if access was removed")
+		}
+		be = gd
+	} else if be, err = OpenBackend(ctx, cfg.Offsite); err != nil {
 		return nil, err
 	}
 	return &Copier{Backend: be, Keys: keys, Prefix: cfg.Offsite.Prefix, Store: store, Repo: r, Actor: actor}, nil

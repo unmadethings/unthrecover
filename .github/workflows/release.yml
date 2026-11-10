@@ -56,6 +56,11 @@ jobs:
       - name: Vulnerability scan
         run: make vuln
       - name: Build artifacts, .deb/.rpm packages and checksums
+        env:
+          # The project's Google OAuth client ("Desktop app"): lets users connect
+          # their own Google Drive from the panel. Not confidential for installed apps.
+          UNTH_GOOGLE_CLIENT_ID: ${{ secrets.UNTH_GOOGLE_CLIENT_ID }}
+          UNTH_GOOGLE_CLIENT_SECRET: ${{ secrets.UNTH_GOOGLE_CLIENT_SECRET }}
         run: make dist VERSION="$VERSION"
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3

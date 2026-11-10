@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, fmtBytes } from "../api";
 import { ErrorBox } from "../components";
+import { Connections } from "./Connections";
 
 export function SettingsView({ onError }: { onError: (e: unknown) => void }) {
   const [info, setInfo] = useState<Record<string, string | number | boolean>>();
@@ -40,9 +41,10 @@ export function SettingsView({ onError }: { onError: (e: unknown) => void }) {
           </dl>
         </div>
       )}
+      <Connections onError={onError} />
       <div className="card muted small">
         Jobs, retention and notifications are configured in job files and run with <code>unth run</code> (systemd
-        timer or cron). The panel is read-only except for starting verifications. See docs/SCHEDULING.md.
+        timer or cron). The panel only starts verifications and manages connections. See docs/SCHEDULING.md.
       </div>
     </>
   );

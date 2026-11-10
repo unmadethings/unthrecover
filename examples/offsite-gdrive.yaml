@@ -1,5 +1,5 @@
-# Unth Recover job with offsite copies to Google Drive through rclone.
-# Connect the drive once:  rclone config   (name: gdrive, storage: drive)
+# Unth Recover job with offsite copies to your own Google Drive.
+# Connect it once in the panel: Settings → Connections → Connect Google Drive.
 # See docs/OFFSITE.md.
 version: 1
 
@@ -21,8 +21,7 @@ signing:
   key_file: /etc/unth/keys/sign.key
 
 offsite:
-  type: rclone
-  remote: "gdrive:Unth Backups"
-  rclone_config: /etc/unth/rclone.conf
+  type: gdrive
+  connection: gdrive      # the name shown in the panel
   retention:
     keep_daily: 14

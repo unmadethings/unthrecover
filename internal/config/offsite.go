@@ -15,7 +15,10 @@ import (
 // they leave the server unless allow_unencrypted is set, and each copy is
 // downloaded again and checked after the upload.
 type Offsite struct {
-	Type string `yaml:"type"` // s3 | rclone
+	Type string `yaml:"type"` // s3 | rclone | gdrive
+
+	// type: gdrive — a Google Drive connected in the panel (Settings → Connections)
+	Connection string `yaml:"connection"`
 
 	// type: s3
 	Endpoint     string `yaml:"endpoint"`       // e.g. https://storage.googleapis.com (default: AWS S3)
@@ -41,6 +44,7 @@ type Offsite struct {
 const (
 	OffsiteS3     = "s3"
 	OffsiteRclone = "rclone"
+	OffsiteGDrive = "gdrive"
 )
 
 // Enabled reports whether offsite copies are configured.
@@ -73,6 +77,7 @@ var (
 	remotePattern  = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_. -]*:[^\x00-\x1f]*$`)
 	agePublicKey   = regexp.MustCompile(`^age1[02-9ac-hj-np-z]{58}$`)
 	regionPattern  = regexp.MustCompile(`^[a-z0-9-]{1,40}$`)
+	connPattern    = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
 	endpointSchema = map[string]bool{"http": true, "https": true}
 )
 
@@ -139,8 +144,8 @@ func (c *Config) validateOffsite(add func(string, ...any)) {
 		if !envPattern.MatchString(o.AccessKeyEnv) || !envPattern.MatchString(o.SecretKeyEnv) {
 			add("offsite.access_key_env and offsite.secret_key_env: required environment variable names (keys are secrets)")
 		}
-		if o.Remote != "" || o.RcloneConfig != "" || o.RcloneBinary != "" {
-			add("offsite: remote/rclone_* are only used by type rclone")
+		if o.Remote != "" || o.RcloneConfig != "" || o.RcloneBinary != "" || o.Connection != "" {
+			add("offsite: remote/rclone_*/connection are not used by type s3")
 		}
 	case OffsiteRclone:
 		if !remotePattern.MatchString(o.Remote) || strings.HasPrefix(o.Remote, "-") || strings.Contains(o.Remote, "..") {
@@ -152,8 +157,15 @@ func (c *Config) validateOffsite(add func(string, ...any)) {
 		if o.Endpoint != "" {
 			add("offsite.endpoint: only used by type s3")
 		}
+	case OffsiteGDrive:
+		if !connPattern.MatchString(o.Connection) {
+			add("offsite.connection: required, the name of a Google Drive connection made in the panel (e.g. gdrive)")
+		}
+		if o.Bucket != "" || o.AccessKeyEnv != "" || o.SecretKeyEnv != "" || o.Endpoint != "" || o.Remote != "" || o.RcloneConfig != "" {
+			add("offsite: only connection (and prefix, retention, timeout) are used by type gdrive")
+		}
 	default:
-		add("offsite.type: must be %q or %q", OffsiteS3, OffsiteRclone)
+		add("offsite.type: must be %q, %q or %q", OffsiteS3, OffsiteRclone, OffsiteGDrive)
 	}
 }
 

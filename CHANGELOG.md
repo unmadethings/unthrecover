@@ -3,6 +3,17 @@
 All notable changes are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning: [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Connect Google Drive in the panel** (Settings → Connections): Google's own sign-in and consent
+  page in the browser; each user connects their own Drive; scope `drive.file` (unth sees only its
+  own files, folder "Unth Recover Backups"); OAuth with PKCE; token stays on the server (0600),
+  revoked on Disconnect. New offsite type `gdrive` (`connection: gdrive`) with native Drive API
+  support (resumable uploads) — no rclone needed. A new machine reuses the existing folder.
+- Release builds embed the project's Google OAuth client; `UNTH_GOOGLE_CLIENT_ID/_SECRET` and
+  `UNTH_GOOGLE_REDIRECT_URL` for own clients.
+
 ## [0.3.0-beta] — 2026-11-10 — offsite copies, Coolify/Dokploy, .rpm, Compose
 
 ### Added
