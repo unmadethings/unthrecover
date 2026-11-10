@@ -36,6 +36,34 @@ jobs:
         run: |
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "invalid tag"; exit 1; }
           test -f ".github/release-notes/$TAG.md" || { echo "missing release notes"; exit 1; }
+      - name: Reconcile SHA256SUMS with asset names GitHub rewrote
+        # GitHub replaces characters such as "~" in uploaded asset names. When a
+        # SHA256SUMS entry has no asset of that name, it is renamed to the asset
+        # whose content has exactly that hash. Hashes are never recomputed or
+        # changed, so a modified asset still fails `sha256sum -c`.
+        run: |
+          set -euo pipefail
+          d=$(mktemp -d)
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -D "$d"
+          cd "$d"
+          changed=0
+          : > SHA256SUMS.new
+          while read -r hash name; do
+            if [ ! -f "$name" ]; then
+              for f in *; do
+                [ "$f" = SHA256SUMS ] || [ "$f" = SHA256SUMS.new ] && continue
+                if [ "$(sha256sum "$f" | cut -d' ' -f1)" = "$hash" ]; then
+                  echo "renaming entry $name -> $f (same sha256)"; name=$f; changed=1; break
+                fi
+              done
+            fi
+            printf '%s  %s\n' "$hash" "$name" >> SHA256SUMS.new
+          done < SHA256SUMS
+          mv SHA256SUMS.new SHA256SUMS
+          sha256sum -c SHA256SUMS
+          if [ "$changed" = 1 ]; then
+            gh release upload "$TAG" SHA256SUMS --clobber -R "$GITHUB_REPOSITORY"
+          fi
       - name: Publish draft (or update notes of an already published release)
         run: |
           rel=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \

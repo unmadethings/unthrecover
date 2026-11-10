@@ -1,7 +1,8 @@
 #!/bin/sh
 # Builds a Debian/Ubuntu package from a release binary in dist/.
 #   scripts/build-deb.sh <version-tag> <amd64|arm64>
-# Output: dist/unthrecover_<debversion>_<arch>.deb
+# Output: dist/unthrecover_<tag without v>_<arch>.deb (file name has no "~": GitHub
+# rewrites "~" in asset names, which would break SHA256SUMS; the package version keeps it)
 set -eu
 TAG="$1"
 ARCH="$2"
@@ -68,6 +69,6 @@ if [ -d /run/systemd/system ]; then systemctl daemon-reload || true; fi
 exit 0
 EOF
 chmod 0755 "$ROOT/DEBIAN/postinst" "$ROOT/DEBIAN/postrm"
-OUT="dist/unthrecover_${DEBVER}_${ARCH}.deb"
+OUT="dist/unthrecover_${TAG#v}_${ARCH}.deb"
 dpkg-deb --root-owner-group --build "$ROOT" "$OUT" >/dev/null
 echo "$OUT"
