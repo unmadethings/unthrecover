@@ -31,13 +31,13 @@ Status legend: ✅ done and tested · 🟡 partial · ⬜ not started. Updated w
 | Install script with checksum verification | ✅ `scripts/install.sh`; 6 tests in `make test-install` (CI) |
 | CI matrix PostgreSQL 12–17 | ✅ (done during M0 hardening) |
 
-Remaining for the M1 release (`v0.2.0-alpha`): packaging (.deb), a Docker image for `unth`
-itself, and user interviews before M2.
+Packaging done: `.deb`, container image, install script. User interview kit ready; interviews pending (maintainers).
 
-## M2 — Web management panel
-React + TypeScript + Vite; Overview, Infrastructure, Workloads, Backups, Recovery Tests,
-Reports, Policies, Activity, Settings. Authentication required; never exposed unauthenticated.
-Visual flow `CREATED → INTEGRITY CHECKED → RESTORE TESTED → VERIFIED`.
+## M2 — Web management panel (first version done)
+`unth serve`: token-authenticated panel (React + TypeScript + Vite, embedded) with Overview,
+Workloads, Backups & recovery tests (visual pipeline), reports with suggested fixes, Verify now,
+Activity log, Settings; light/dark themes. Remaining: policies/settings editing in the UI, RBAC (M4).
+User interviews (docs/research/KULLANICI_GORUSMELERI.md) decide the next UI investments.
 
 ## M3 — Storage & integrations
 S3-compatible storage (MinIO etc.), encryption, signed manifests, Coolify & Dokploy integrations.

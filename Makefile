@@ -48,6 +48,9 @@ dist: ## Release binaries + SHA256SUMS in dist/
 
 deb: dist ## Debian packages (built by dist)
 
+web: ## Build the web panel into internal/web/dist (embedded by go build)
+	cd web && npm ci --no-audit --no-fund && npm run build
+
 image: ## Docker image from dist/ (run make dist first)
 	docker build --build-arg VERSION=$(VERSION) -t unthrecover:$(VERSION) .
 

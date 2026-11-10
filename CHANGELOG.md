@@ -18,6 +18,15 @@ versioning: [SemVer](https://semver.org/).
   audited); archive via never-started helper containers; per-file manifest; verification by
   restore into a new isolated volume and full file comparison; unsafe archives rejected.
 - systemd service/timer templates (hardened) and a cron example; docs/SCHEDULING.md.
+- Web management panel (M2): `unth serve` with token login, HttpOnly/SameSite=Strict sessions,
+  CSRF header, login rate limiting, strict CSP; TLS required for non-loopback listening. Views:
+  overview (workloads, last verified recovery, 30-day success rate, storage, avg. test restore),
+  backups with the CREATED → INTEGRITY CHECKED → RESTORE TESTED → VERIFIED pipeline, run reports
+  with failure reason and suggested fix, "Verify now", activity log, settings. React + TypeScript +
+  Vite, embedded in the binary.
+- Packaging: `.deb` (systemd units, `unth` user), container image built from release binaries
+  (unth attaches itself to sandbox networks: `UNTH_SANDBOX_JOIN`).
+- User interview kit (docs/research/KULLANICI_GORUSMELERI.md).
 - `scripts/install.sh`: downloads a release binary + SHA256SUMS, verifies, smoke-runs and
   installs atomically; refuses mismatches, missing entries, invalid versions and plain http.
 - CI: PostgreSQL 12–17 integration matrix; disk-full test runs on CI; installer tests.

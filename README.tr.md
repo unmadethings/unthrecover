@@ -79,10 +79,12 @@ Komut referansı (İngilizce): [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)
 - Zamanlanmış işler: `unth run` (yedek → doğrulama → saklama politikası → bildirim), systemd/cron şablonları
 - Saklama politikası (`unth prune`; en yeni VERIFIED yedek asla silinmez)
 - Webhook (HMAC imzalı) ve Slack bildirimleri
+- Web yönetim paneli (`unth serve`): genel bakış, iş yükleri, kurtarma adımlarıyla yedekler, raporlar, etkinlik kaydı; token ile giriş, loopback dışında TLS zorunlu
+- Paketler: `.deb`, konteyner imajı (`ghcr.io/unmadethings/unthrecover`), kurulum betiği
 
 ## Henüz geliştirilmeyenler
 
-S3 uyumlu depolama, şifreleme, imzalı manifest, web arayüzü,
+S3 uyumlu depolama, şifreleme, imzalı manifest,
 production restore, çoklu sunucu.
 
 ## Bilinen sınırlamalar

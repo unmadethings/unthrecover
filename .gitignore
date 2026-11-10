@@ -10,3 +10,4 @@ metadata.db*
 *.pass
 .env
 .env.*
+/web/node_modules/

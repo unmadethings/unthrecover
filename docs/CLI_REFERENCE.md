@@ -89,6 +89,11 @@ Applies the job's `retention:` rules to its workload. Expired backups lose their
 directory and become `EXPIRED`; history is kept. The newest VERIFIED backup is never expired.
 Exit 2 if no retention rules are configured.
 
+### `unth serve [--listen 127.0.0.1:8484] [--token-file FILE] [--tls-cert C --tls-key K]`
+Authenticated web management panel and JSON API. See [WEB_PANEL.md](WEB_PANEL.md). The admin
+token comes from `--token-file` (0600) or `UNTH_UI_TOKEN` (min. 24 chars); plain HTTP only on
+loopback, otherwise TLS is required.
+
 ### `unth audit list [--format text|json] [--limit N]`
 Audit trail of backups, verifications and cleanups (no secret values).
 

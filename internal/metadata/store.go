@@ -387,6 +387,24 @@ func (s *Store) ListRuns(ctx context.Context, backupID string) ([]*Run, error) {
 	return out, rows.Err()
 }
 
+// ListRunsSince returns verification runs started at or after t.
+func (s *Store) ListRunsSince(ctx context.Context, t time.Time) ([]*Run, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+runCols+` FROM verification_runs WHERE started_at >= ? ORDER BY started_at DESC`, fmtTime(t))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*Run
+	for rows.Next() {
+		r, err := scanRun(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // InterruptedBackups returns backups left in PENDING/RUNNING state.
 func (s *Store) InterruptedBackups(ctx context.Context) ([]*Backup, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+backupCols+` FROM backups WHERE status IN ('PENDING','RUNNING')`)

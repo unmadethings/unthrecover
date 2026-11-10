@@ -110,10 +110,12 @@ All commands: [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md).
 - Scheduled jobs: `unth run` (backup → verify → prune → notify) with systemd/cron templates
 - Retention policies (`unth prune`; the newest VERIFIED backup is never expired)
 - Webhook (HMAC-signed) and Slack notifications
+- Web management panel (`unth serve`): overview, workloads, backups with the recovery pipeline, reports, activity log; token login, TLS required off-loopback
+- Packages: `.deb`, container image (`ghcr.io/unmadethings/unthrecover`), install script
 
 ## Not implemented yet
 
-S3-compatible storage, encryption, signed manifests, web UI,
+S3-compatible storage, encryption, signed manifests,
 production restore, multi-server. See [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md).
 Nothing in this list is partially present behind a flag.
 
