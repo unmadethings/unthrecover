@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/unmadethings/unthrecover/internal/config"
@@ -39,6 +40,17 @@ type Sandbox struct {
 
 	dc  *docker.Client
 	log *slog.Logger
+}
+
+// SelfContainer returns the container unth runs in when UNTH_SANDBOX_JOIN is
+// set ("auto" = this host's name, which Docker sets to the container ID).
+func SelfContainer() string {
+	v := os.Getenv("UNTH_SANDBOX_JOIN")
+	if v == "auto" {
+		h, _ := os.Hostname()
+		return h
+	}
+	return v
 }
 
 // Labels returns the labels applied to every sandbox resource.
@@ -84,8 +96,16 @@ func Create(ctx context.Context, dc *docker.Client, runID, backupID string, majo
 	if err := ensureImage(ctx, dc, image, v.ImagePull); err != nil {
 		return sb, err
 	}
-	if _, err := dc.CreateNetwork(ctx, sb.NetworkName, Labels(runID, backupID, "network")); err != nil {
+	join := SelfContainer()
+	if _, err := dc.CreateNetworkOpts(ctx, sb.NetworkName, Labels(runID, backupID, "network"), join != ""); err != nil {
 		return sb, envErr("create isolated network", err)
+	}
+	if join != "" {
+		// unth runs inside a container: attach it to the sandbox network so it
+		// can reach the restore target. Detached again by Cleanup.
+		if err := dc.ConnectNetwork(ctx, sb.NetworkName, join); err != nil {
+			return sb, envErr("attach unth container "+join+" to the sandbox network (UNTH_SANDBOX_JOIN)", err)
+		}
 	}
 	if err := dc.CreateVolume(ctx, sb.VolumeName, Labels(runID, backupID, "data")); err != nil {
 		return sb, envErr("create sandbox volume", err)
@@ -252,6 +272,18 @@ func Cleanup(ctx context.Context, dc *docker.Client, runID string) (*CleanupResu
 		}
 	}
 	nets, err := dc.ListNetworks(ctx, filters...)
+	// Endpoints on OUR labeled network can only be the sandbox (already
+	// removed above) and the unth container itself (UNTH_SANDBOX_JOIN).
+	for _, n := range nets {
+		if n.Labels[docker.LabelManaged] != "true" || n.Labels[docker.LabelRun] != runID {
+			continue
+		}
+		if eps, epErr := dc.NetworkEndpoints(ctx, n.ID); epErr == nil {
+			for _, ep := range eps {
+				_ = dc.DisconnectNetwork(ctx, n.ID, ep)
+			}
+		}
+	}
 	if err != nil {
 		res.Errors = append(res.Errors, "list networks: "+err.Error())
 	}

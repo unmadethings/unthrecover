@@ -304,14 +304,52 @@ type Network struct {
 
 // CreateNetwork creates an internal (no external connectivity) bridge network.
 func (c *Client) CreateNetwork(ctx context.Context, name string, labels map[string]string) (string, error) {
+	return c.CreateNetworkOpts(ctx, name, labels, false)
+}
+
+// CreateNetworkOpts creates an internal network. allowICC enables
+// container-to-container traffic; it is only needed when unth itself runs in
+// a container and joins the sandbox network.
+func (c *Client) CreateNetworkOpts(ctx context.Context, name string, labels map[string]string, allowICC bool) (string, error) {
 	var out struct {
 		ID string `json:"Id"`
 	}
+	icc := "false"
+	if allowICC {
+		icc = "true"
+	}
 	err := c.do(ctx, http.MethodPost, "/networks/create", nil, map[string]any{
 		"Name": name, "Driver": "bridge", "Internal": true, "Attachable": false, "Labels": labels,
-		"Options": map[string]string{"com.docker.network.bridge.enable_icc": "false"},
+		"Options": map[string]string{"com.docker.network.bridge.enable_icc": icc},
 	}, &out, true)
 	return out.ID, err
+}
+
+// ConnectNetwork attaches a container to a network.
+func (c *Client) ConnectNetwork(ctx context.Context, network, container string) error {
+	return c.do(ctx, http.MethodPost, "/networks/"+url.PathEscape(network)+"/connect", nil,
+		map[string]any{"Container": container}, nil, true)
+}
+
+// DisconnectNetwork detaches a container from a network (forced).
+func (c *Client) DisconnectNetwork(ctx context.Context, network, container string) error {
+	return c.do(ctx, http.MethodPost, "/networks/"+url.PathEscape(network)+"/disconnect", nil,
+		map[string]any{"Container": container, "Force": true}, nil, true)
+}
+
+// NetworkEndpoints returns the IDs of containers attached to a network.
+func (c *Client) NetworkEndpoints(ctx context.Context, network string) ([]string, error) {
+	var out struct {
+		Containers map[string]any `json:"Containers"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/networks/"+url.PathEscape(network), nil, nil, &out, true); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(out.Containers))
+	for id := range out.Containers {
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // ListNetworks lists networks filtered by labels.

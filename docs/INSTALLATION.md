@@ -70,3 +70,31 @@ All checks should be `PASS`. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) otherw
 ## Data directory
 Default `~/.local/share/unthrecover` (override with `--data-dir` or `UNTH_DATA_DIR`). It holds
 copies of your data — place it on a disk with enough space, readable only by the operator.
+
+## Debian / Ubuntu package (.deb)
+Release assets include `unthrecover_<version>_<arch>.deb` (listed in `SHA256SUMS`). The package
+installs `/usr/bin/unth`, the systemd units `unth@.service` / `unth@.timer`, examples in
+`/usr/share/doc/unthrecover/examples`, creates the system user `unth` (added to the `docker`
+group if it exists), `/var/lib/unthrecover` (0700) and `/etc/unth/jobs` (0750 root:unth).
+It depends on `postgresql-client`; install a client whose major version is ≥ your servers.
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing && sudo apt install ./unthrecover_0.2.0~alpha_amd64.deb
+```
+
+Removing the package never deletes backups (`/var/lib/unthrecover`) or job configs (`/etc/unth`).
+
+## Container image
+`ghcr.io/unmadethings/unthrecover:<version>` (linux/amd64, linux/arm64) is built from the same
+release binaries. It contains PostgreSQL 17 client tools (backs up servers 12–17), runs as an
+unprivileged user and needs the Docker socket — which is root-equivalent; only run it where
+Docker access is already granted. During verification the container attaches itself to each
+isolated sandbox network (`UNTH_SANDBOX_JOIN=auto`) and detaches again during cleanup, so it
+works without host networking.
+
+```bash
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --group-add "$(stat -c %g /var/run/docker.sock)" -v unth-data:/var/lib/unthrecover -v "$PWD/job.yaml:/etc/unth/job.yaml:ro" -e SHOP_DB_PASSWORD ghcr.io/unmadethings/unthrecover:v0.2.0-alpha run --config /etc/unth/job.yaml
+```
+
+The source database host must be reachable from the container (use the database's service
+name on a shared Docker network, or the host's address). Volume backups work the same way.

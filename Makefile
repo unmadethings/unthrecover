@@ -5,7 +5,7 @@ DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 PKG     := github.com/unmadethings/unthrecover/internal/buildinfo
 LDFLAGS := -s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).Date=$(DATE)
 
-.PHONY: all build test test-race test-integration test-install lint vuln sec check dist clean
+.PHONY: all build test test-race test-integration test-install lint vuln sec check dist deb image web clean
 
 all: check build
 
@@ -43,7 +43,13 @@ dist: ## Release binaries + SHA256SUMS in dist/
 	for arch in amd64 arm64; do \
 	  CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" -o dist/unth_$(VERSION)_linux_$$arch ./cmd/unth; \
 	done
-	cd dist && sha256sum unth_* > SHA256SUMS
+	for arch in amd64 arm64; do sh scripts/build-deb.sh $(VERSION) $$arch >/dev/null; done
+	cd dist && sha256sum unth_* unthrecover_* > SHA256SUMS
+
+deb: dist ## Debian packages (built by dist)
+
+image: ## Docker image from dist/ (run make dist first)
+	docker build --build-arg VERSION=$(VERSION) -t unthrecover:$(VERSION) .
 
 clean:
 	rm -rf bin dist
