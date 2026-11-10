@@ -118,7 +118,7 @@ jobs:
         run: make dist VERSION=v0.0.0-ci
       - name: Install the .deb in a clean Debian container
         if: matrix.pg == '16'
-        run: sh scripts/test-deb.sh dist/unthrecover_0.0.0~ci_amd64.deb
+        run: sh scripts/test-deb.sh dist/unthrecover_0.0.0-ci_amd64.deb
       - name: Build the container image (PGDG clients 13-17)
         run: docker build --build-arg VERSION=v0.0.0-ci -t unthrecover:ci .
       - name: Host PostgreSQL client for the test harness
