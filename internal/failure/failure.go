@@ -38,6 +38,10 @@ const (
 	SourceNotFound      Category = "SOURCE_NOT_FOUND"
 	ConsistencyUnsafe   Category = "CONSISTENCY_UNSAFE"
 	FileMismatch        Category = "FILE_MISMATCH"
+	OffsiteFailed       Category = "OFFSITE_FAILED"
+	OffsiteMismatch     Category = "OFFSITE_MISMATCH"
+	SignatureInvalid    Category = "SIGNATURE_INVALID"
+	DecryptionFailed    Category = "DECRYPTION_FAILED"
 	Internal            Category = "INTERNAL_ERROR"
 )
 

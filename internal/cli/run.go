@@ -16,6 +16,10 @@ import (
 // ExitNotifyFailed: the job itself succeeded but a notification failed.
 const ExitNotifyFailed = 4
 
+// ExitOffsiteFailed: the backup is VERIFIED locally but the offsite copy
+// failed or could not be proven; nothing was pruned.
+const ExitOffsiteFailed = 5
+
 func newRunCmd(app *App) *cobra.Command {
 	var cfgPath, format string
 	cmd := &cobra.Command{
@@ -28,8 +32,12 @@ func newRunCmd(app *App) *cobra.Command {
   4. applies retention (only if verification succeeded; the newest VERIFIED backup is always kept),
   5. sends notifications (always attempted, even after a failure).
 
+With offsite: configured, step 4 first copies the verified backup offsite (encrypted), downloads
+it again and checks it; only then is anything pruned (locally and offsite).
+
 Exit codes: 0 verified · 1 backup or prune failed · 3 not verified · 4 job succeeded but a
-notification failed · 130 cancelled · 2 configuration error.`,
+notification failed · 5 verified locally but the offsite copy failed · 130 cancelled · 2
+configuration error.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := checkFormat(format); err != nil {
@@ -62,6 +70,8 @@ notification failed · 130 cancelled · 2 configuration error.`,
 				return &ExitError{Code: ExitCancelled}
 			case sum.Outcome == runner.OutcomeFailure && sum.Stage == "verify":
 				return &ExitError{Code: ExitNotVerified}
+			case sum.Outcome == runner.OutcomeFailure && sum.Stage == "offsite":
+				return &ExitError{Code: ExitOffsiteFailed}
 			case sum.Outcome == runner.OutcomeFailure:
 				return &ExitError{Code: ExitFailure}
 			case sum.NotifyFailed():
@@ -93,6 +103,13 @@ func printSummary(app *App, s *runner.Summary) {
 	}
 	if s.Hint != "" {
 		fmt.Fprintf(app.Out, "Suggested fix: %s\n", s.Hint)
+	}
+	if o := s.Offsite; o != nil {
+		fmt.Fprintf(app.Out, "Offsite:       %s %s (encrypted=%v signed=%v)", o.Status, strings.TrimSuffix(o.Target+"/"+o.Location, "/"), o.Encrypted, o.Signed)
+		if len(o.Pruned) > 0 {
+			fmt.Fprintf(app.Out, ", pruned %d copy(ies)", len(o.Pruned))
+		}
+		fmt.Fprintln(app.Out)
 	}
 	switch {
 	case s.Prune != nil:

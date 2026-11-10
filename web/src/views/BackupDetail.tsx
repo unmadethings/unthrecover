@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, fmtBytes, fmtMs, fmtTime, type Backup, type Report, type Run } from "../api";
+import { api, ApiError, fmtBytes, fmtMs, fmtTime, type Backup, type OffsiteCopy, type Report, type Run } from "../api";
 import { Badge, ErrorBox, Pipeline, pipelineFromBackup, pipelineFromSteps } from "../components";
 
 export function BackupDetail({ id, onError }: { id: string; onError: (e: unknown) => void }) {
   const [backup, setBackup] = useState<Backup>();
   const [runs, setRuns] = useState<Run[]>([]);
+  const [copies, setCopies] = useState<OffsiteCopy[]>([]);
   const [selected, setSelected] = useState<string>();
   const [report, setReport] = useState<Report>();
   const [error, setError] = useState<string>();
@@ -16,6 +17,7 @@ export function BackupDetail({ id, onError }: { id: string; onError: (e: unknown
       .then((d) => {
         setBackup(d.backup);
         setRuns(d.runs);
+        setCopies(d.offsite_copies ?? []);
         setSelected((cur) => cur ?? d.runs.find((r) => r.has_report)?.id);
       })
       .catch((e) => {
@@ -145,6 +147,46 @@ export function BackupDetail({ id, onError }: { id: string; onError: (e: unknown
                 <td className="num">{fmtMs(r.restore_duration_ms)}</td>
                 <td className="num">{fmtMs(r.total_duration_ms)}</td>
                 <td>{r.error_category ?? ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <h2>Offsite copies</h2>
+      {copies.length === 0 ? (
+        <div className="card muted">
+          No copy of this backup outside this server. Configure <code>offsite:</code> in the job to copy verified
+          backups to S3, Google Cloud Storage or Google Drive (rclone).
+        </div>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Target</th>
+              <th>State</th>
+              <th>Protection</th>
+              <th className="num">Size</th>
+              <th>Last checked</th>
+              <th>Failure</th>
+            </tr>
+          </thead>
+          <tbody>
+            {copies.map((c) => (
+              <tr key={c.target}>
+                <td className="mono">
+                  {c.target}/{c.location}
+                </td>
+                <td>
+                  <Badge value={c.status} />
+                </td>
+                <td>
+                  {c.encrypted ? "encrypted" : <span className="warn-text">not encrypted</span>}
+                  {c.signed ? " · signed" : ""}
+                </td>
+                <td className="num">{fmtBytes(c.size_bytes)}</td>
+                <td>{c.checked_at ? fmtTime(c.checked_at) : "—"}</td>
+                <td>{c.error_category ? c.error_category + ": " + (c.error_message ?? "") : ""}</td>
               </tr>
             ))}
           </tbody>

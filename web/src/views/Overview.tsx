@@ -40,6 +40,16 @@ export function OverviewView({ onError }: { onError: (e: unknown) => void }) {
           tone={data.failed_runs_30d > 0 ? "bad" : ""}
         />
         <Stat label="Backup storage" value={fmtBytes(data.storage_bytes)} />
+        <Stat
+          label="Offsite copies"
+          value={String(data.offsite_verified_copies)}
+          sub={
+            data.last_offsite_check_at
+              ? "downloaded and checked " + ago(data.last_offsite_check_at)
+              : "no copy outside this server yet"
+          }
+          tone={data.offsite_verified_copies > 0 ? "" : "warn"}
+        />
         <Stat label="Avg. test restore (30 d)" value={fmtMs(data.avg_restore_duration_ms_30d)} sub="observed, not an RTO" />
       </div>
 

@@ -49,6 +49,8 @@ type Event struct {
 	ErrorMessage       string    `json:"error_message,omitempty"`
 	Hint               string    `json:"hint,omitempty"`
 	Pruned             []string  `json:"pruned_backup_ids,omitempty"`
+	OffsiteTarget      string    `json:"offsite_target,omitempty"`
+	OffsiteStatus      string    `json:"offsite_status,omitempty"`
 	StartedAt          time.Time `json:"started_at"`
 	FinishedAt         time.Time `json:"finished_at"`
 	DurationMS         int64     `json:"duration_ms"`

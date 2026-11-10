@@ -1,0 +1,28 @@
+# Unth Recover job with offsite copies to Google Drive through rclone.
+# Connect the drive once:  rclone config   (name: gdrive, storage: drive)
+# See docs/OFFSITE.md.
+version: 1
+
+source:
+  name: shop-db
+  host: 127.0.0.1
+  port: 5432
+  database: shop
+  user: backup_reader
+  password_env: SHOP_DB_PASSWORD
+
+retention:
+  keep_last: 3
+
+encryption:
+  identity_file: /etc/unth/keys/age.key
+
+signing:
+  key_file: /etc/unth/keys/sign.key
+
+offsite:
+  type: rclone
+  remote: "gdrive:Unth Backups"
+  rclone_config: /etc/unth/rclone.conf
+  retention:
+    keep_daily: 14

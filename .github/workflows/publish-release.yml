@@ -209,6 +209,42 @@ jobs:
           cp "$GITHUB_WORKSPACE/rel/$TAG/compose.yaml" .
           printf 'UNTH_UI_TOKEN=%s\nDOCKER_GID=%s\n' "$(openssl rand -hex 24)" "$(stat -c %g /var/run/docker.sock)" > .env
           docker compose config --quiet
+      - name: "v0.3+: encrypted offsite copy with the released binary (rclone remote) and rclone in the image"
+        if: inputs.tag != 'v0.1.0-alpha' && inputs.tag != 'v0.2.0-alpha'
+        run: |
+          set -euo pipefail
+          sudo sh scripts/install-rclone.sh
+          export UNTH_DATA_DIR="$RUNNER_TEMP/data3"
+          unth keys generate --dir "$RUNNER_TEMP/keys"
+          printf '[smoke]\ntype = local\n' > "$RUNNER_TEMP/rclone.conf"
+          cat > "$RUNNER_TEMP/job3.yaml" <<EOF
+          version: 1
+          source:
+            name: smoke-offsite
+            host: 127.0.0.1
+            port: 55432
+            database: shop
+            user: postgres
+            password_file: $RUNNER_TEMP/src.pass
+            sslmode: disable
+          verification:
+            restore_image: postgres:16-alpine
+          encryption:
+            identity_file: $RUNNER_TEMP/keys/age.key
+          signing:
+            key_file: $RUNNER_TEMP/keys/sign.key
+          offsite:
+            type: rclone
+            remote: "smoke:$RUNNER_TEMP/remote"
+            rclone_config: $RUNNER_TEMP/rclone.conf
+          EOF
+          unth run --config "$RUNNER_TEMP/job3.yaml" | tee "$RUNNER_TEMP/run3.log"
+          grep -q "Offsite:       REMOTE_VERIFIED" "$RUNNER_TEMP/run3.log"
+          id=$(unth backup list --format json | jq -r '.[0].id')
+          UNTH_DATA_DIR="$RUNNER_TEMP/data4" unth offsite fetch --config "$RUNNER_TEMP/job3.yaml" "$id"
+          UNTH_DATA_DIR="$RUNNER_TEMP/data4" unth verify "$id"
+          if grep -rq "CREATE TABLE" "$RUNNER_TEMP/remote"; then echo "plaintext dump on the remote"; exit 1; fi
+          docker run --rm --entrypoint rclone "ghcr.io/${GITHUB_REPOSITORY}:$TAG" version | head -1
       - name: Leftover resource check
         if: always()
         run: |

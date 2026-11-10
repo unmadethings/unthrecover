@@ -26,6 +26,8 @@ jobs:
         run: go mod verify
       - name: Lint (vet, gofmt, staticcheck)
         run: make lint
+      - name: rclone (pinned, checksum-verified) for the rclone backend tests
+        run: sudo sh scripts/install-rclone.sh
       - name: Unit tests (race)
         run: make test-race
       - name: Build
@@ -76,8 +78,10 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y -q postgresql-client-${{ matrix.client }}
           echo "/usr/lib/postgresql/${{ matrix.client }}/bin" >> "$GITHUB_PATH"
+      - name: rclone (pinned, checksum-verified)
+        run: sudo sh scripts/install-rclone.sh
       - name: Tool versions
-        run: pg_dump --version && pg_restore --version && docker info --format 'Docker {{.ServerVersion}}'
+        run: pg_dump --version && pg_restore --version && rclone version | head -1 && docker info --format 'Docker {{.ServerVersion}}'
       - name: Browser for the web panel e2e test (PostgreSQL 16 leg)
         if: matrix.pg == '16'
         run: |
@@ -125,7 +129,9 @@ jobs:
           sh scripts/test-rpm.sh dist/unthrecover_0.0.0-ci_amd64.rpm rockylinux:9
           sh scripts/test-rpm.sh dist/unthrecover_0.0.0-ci_amd64.rpm fedora:41
       - name: Build the container image (PGDG clients 13-17)
-        run: docker build --build-arg VERSION=v0.0.0-ci -t unthrecover:ci .
+        run: |
+          docker build --build-arg VERSION=v0.0.0-ci -t unthrecover:ci .
+          docker run --rm --entrypoint rclone unthrecover:ci version | head -1
       - name: Host PostgreSQL client for the test harness
         run: |
           sudo apt-get update -q

@@ -392,7 +392,14 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	if restoreN > 0 {
 		avgRestore = restoreSum / restoreN
 	}
+	offsiteN, offsiteLast, err := s.Store.CountVerifiedCopies(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "cannot read metadata")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
+		"offsite_verified_copies":       offsiteN,
+		"last_offsite_check_at":         offsiteLast,
 		"protected_workloads":           len(workloads),
 		"backups_by_status":             statusCount,
 		"last_successful_backup_at":     lastBackup,
@@ -470,7 +477,18 @@ func (s *Server) getBackup(w http.ResponseWriter, r *http.Request) {
 			RestoreDurationMS: run.RestoreDurationMS, TotalDurationMS: run.TotalDurationMS, ErrorCategory: run.ErrorCategory,
 			ErrorMessage: s.Redactor.Redact(run.ErrorMessage), HasReport: run.ReportJSON != ""})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"backup": s.dto(b), "runs": out})
+	copies, err := s.Store.ListCopies(r.Context(), id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "cannot read metadata")
+		return
+	}
+	for _, c := range copies {
+		c.ErrorMessage = s.Redactor.Redact(c.ErrorMessage)
+	}
+	if copies == nil {
+		copies = []*metadata.OffsiteCopy{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"backup": s.dto(b), "runs": out, "offsite_copies": copies})
 }
 
 func (s *Server) getReport(w http.ResponseWriter, r *http.Request) {

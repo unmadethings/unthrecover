@@ -27,6 +27,21 @@ export type Run = {
   has_report: boolean;
 };
 
+export type OffsiteCopy = {
+  backup_id: string;
+  target: string;
+  location: string;
+  status: string;
+  encrypted: boolean;
+  signed: boolean;
+  size_bytes: number;
+  uploaded_at?: string;
+  checked_at?: string;
+  deleted_at?: string;
+  error_category?: string;
+  error_message?: string;
+};
+
 export type WorkloadSummary = {
   workload: string;
   type: string;
@@ -39,6 +54,8 @@ export type WorkloadSummary = {
 };
 
 export type Overview = {
+  offsite_verified_copies: number;
+  last_offsite_check_at?: string | null;
   protected_workloads: number;
   backups_by_status: Record<string, number>;
   last_successful_backup_at?: string | null;
@@ -107,7 +124,7 @@ export const api = {
   overview: () => call<Overview>("GET", "/api/overview"),
   backups: (workload?: string) =>
     call<Backup[]>("GET", "/api/backups" + (workload ? "?workload=" + encodeURIComponent(workload) : "")),
-  backup: (id: string) => call<{ backup: Backup; runs: Run[] }>("GET", "/api/backups/" + encodeURIComponent(id)),
+  backup: (id: string) => call<{ backup: Backup; runs: Run[]; offsite_copies: OffsiteCopy[] }>("GET", "/api/backups/" + encodeURIComponent(id)),
   verify: (id: string) => call<{ started: boolean }>("POST", "/api/backups/" + encodeURIComponent(id) + "/verify", {}),
   report: (runId: string) => call<Report>("GET", "/api/runs/" + encodeURIComponent(runId) + "/report"),
   audit: () => call<AuditEvent[]>("GET", "/api/audit?limit=300"),

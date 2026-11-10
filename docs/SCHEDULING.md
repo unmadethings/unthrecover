@@ -5,8 +5,9 @@
 1. takes a per-job lock (`<data-dir>/locks/<workload>.lock`); an overlapping run exits 1 without doing anything,
 2. creates a backup,
 3. verifies it with a real isolated restore (always — there is no "skip verify"),
-4. applies the retention policy — **only if the verification succeeded**,
-5. sends notifications — always attempted, also after failures and cancellations.
+4. with `offsite:` — copies the verified backup offsite, encrypted, and proves the copy by downloading it again ([OFFSITE.md](OFFSITE.md)),
+5. applies the retention policy (offsite, then local) — **only if verification and the offsite copy succeeded**,
+6. sends notifications — always attempted, also after failures and cancellations.
 
 | Exit code | Meaning | Scheduler should |
 |---|---|---|
@@ -15,6 +16,7 @@
 | 2 | configuration error | alert |
 | 3 | backup created but NOT verified | alert — this backup cannot be trusted |
 | 4 | job succeeded but a notification could not be delivered | alert (you would otherwise miss future failures) |
+| 5 | backup VERIFIED locally, but the offsite copy failed or could not be proven; nothing pruned | alert — the server is the only place this backup exists |
 | 130 | cancelled (SIGINT/SIGTERM) | investigate |
 
 ## Containers: `unth schedule` and Docker Compose

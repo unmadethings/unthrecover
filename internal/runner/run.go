@@ -20,6 +20,7 @@ import (
 	"github.com/unmadethings/unthrecover/internal/failure"
 	"github.com/unmadethings/unthrecover/internal/metadata"
 	"github.com/unmadethings/unthrecover/internal/notify"
+	"github.com/unmadethings/unthrecover/internal/offsite"
 	"github.com/unmadethings/unthrecover/internal/repo"
 	"github.com/unmadethings/unthrecover/internal/report"
 	"github.com/unmadethings/unthrecover/internal/retention"
@@ -37,7 +38,7 @@ const (
 type Summary struct {
 	Workload           string            `json:"workload"`
 	Outcome            string            `json:"outcome"`
-	Stage              string            `json:"failed_stage,omitempty"` // lock|backup|verify|prune
+	Stage              string            `json:"failed_stage,omitempty"` // lock|backup|verify|offsite|prune
 	BackupID           string            `json:"backup_id,omitempty"`
 	BackupStatus       string            `json:"backup_status,omitempty"`
 	RunID              string            `json:"verification_run_id,omitempty"`
@@ -45,12 +46,23 @@ type Summary struct {
 	ErrorCategory      string            `json:"error_category,omitempty"`
 	ErrorMessage       string            `json:"error_message,omitempty"`
 	Hint               string            `json:"hint,omitempty"`
+	Offsite            *OffsiteSummary   `json:"offsite,omitempty"`
 	Prune              *retention.Result `json:"prune,omitempty"`
 	PruneSkipped       string            `json:"prune_skipped,omitempty"`
 	Notifications      []notify.Result   `json:"notifications"`
 	StartedAt          time.Time         `json:"started_at"`
 	FinishedAt         time.Time         `json:"finished_at"`
 	Cancelled          bool              `json:"cancelled,omitempty"`
+}
+
+// OffsiteSummary is the offsite part of a run.
+type OffsiteSummary struct {
+	Target    string   `json:"target"`
+	Location  string   `json:"location,omitempty"`
+	Status    string   `json:"status"`
+	Encrypted bool     `json:"encrypted"`
+	Signed    bool     `json:"signed"`
+	Pruned    []string `json:"pruned_backup_ids,omitempty"`
 }
 
 // NotifyFailed reports whether any notification could not be delivered.
@@ -127,6 +139,16 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *Summary {
 		return r.finish(ctx, cfg, sum)
 	}
 
+	// Offsite copy (and its proof) before any pruning: a failed copy keeps
+	// every local backup.
+	if cfg.Offsite.Enabled() {
+		if err := r.offsite(ctx, cfg, b.ID, sum); err != nil {
+			fail("offsite", err)
+			sum.PruneSkipped = "offsite copy failed; nothing was pruned"
+			return r.finish(ctx, cfg, sum)
+		}
+	}
+
 	if cfg.Retention.Enabled() {
 		pr, err := retention.Apply(ctx, r.Store, r.Repo, cfg.Source.Name, cfg.Retention, false, repo.Actor(), r.now())
 		sum.Prune = pr
@@ -139,6 +161,37 @@ func (r *Runner) Run(ctx context.Context, cfg *config.Config) *Summary {
 	}
 	sum.Outcome = OutcomeSuccess
 	return r.finish(ctx, cfg, sum)
+}
+
+func (r *Runner) offsite(ctx context.Context, cfg *config.Config, backupID string, sum *Summary) error {
+	octx, cancel := context.WithTimeout(ctx, cfg.Offsite.Timeout.D())
+	defer cancel()
+	cp, err := offsite.Open(octx, cfg, r.Store, r.Repo, repo.Actor())
+	if err != nil {
+		sum.Offsite = &OffsiteSummary{Status: metadata.CopyFailed}
+		return err
+	}
+	sum.Offsite = &OffsiteSummary{Target: cp.Backend.Target(), Status: metadata.CopyFailed,
+		Encrypted: cp.Keys.Identity != nil, Signed: cp.Keys.SignKey != nil}
+	b, err := r.Store.GetBackup(octx, backupID) // re-read: verification updated it
+	if err != nil {
+		return err
+	}
+	rec, err := cp.Copy(octx, b)
+	if rec != nil {
+		sum.Offsite.Status, sum.Offsite.Location = rec.Status, rec.Location
+	}
+	if err != nil {
+		if errors.Is(octx.Err(), context.DeadlineExceeded) {
+			return failure.New(failure.Timeout, "offsite copy exceeded offsite.timeout", err)
+		}
+		return err
+	}
+	pr, err := cp.Prune(octx, cfg.Source.Name, cfg.Offsite.Retention, false)
+	if pr != nil {
+		sum.Offsite.Pruned = pr.Deleted
+	}
+	return err
 }
 
 func (r *Runner) finish(ctx context.Context, cfg *config.Config, sum *Summary) *Summary {
@@ -154,6 +207,9 @@ func (r *Runner) finish(ctx context.Context, cfg *config.Config, sum *Summary) *
 		}
 		if sum.Prune != nil {
 			ev.Pruned = sum.Prune.Expired
+		}
+		if sum.Offsite != nil {
+			ev.OffsiteTarget, ev.OffsiteStatus = sum.Offsite.Target, sum.Offsite.Status
 		}
 		sender := r.Sender
 		if sender == nil {

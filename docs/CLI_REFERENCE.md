@@ -24,6 +24,7 @@ Environment: `DOCKER_HOST` (only `unix://` sockets are accepted), `UNTH_DATA_DIR
 | 2 | Usage or configuration error, unknown backup/run ID |
 | 3 | `verify` completed but the backup is **not** verified (`FAILED`) |
 | 4 | `run`: job succeeded but a notification could not be delivered |
+| 5 | `run`/`offsite push`: backup VERIFIED locally but the offsite copy failed or could not be proven; nothing pruned |
 | 130 | Cancelled (SIGINT/SIGTERM) |
 
 ## Commands
@@ -106,6 +107,17 @@ A failing job is logged (one line per job: outcome, verification status, error c
 does not stop the others. `--at` uses `TZ` (default UTC in the image); `--every` is at least 1m.
 The job list is re-read every round. SIGINT/SIGTERM stops it; a running job is recorded as
 CANCELLED.
+
+### `unth keys generate [--dir /etc/unth/keys]`
+Creates `age.key` (encryption identity, 0600), `sign.key` (Ed25519, 0600) and `sign.pub`.
+Never overwrites existing key files. See [OFFSITE.md](OFFSITE.md).
+
+### `unth offsite list|check|push|fetch|prune --config FILE`
+Offsite copies of the job's workload ([OFFSITE.md](OFFSITE.md)): `list` complete copies on the
+target; `check <id>` downloads a copy again and proves signature, hashes and decryption (exit 3
+if not OK); `push <id>` copies an existing VERIFIED backup (exit 5 on failure); `fetch <id>`
+disaster recovery — downloads, proves and imports a copy as a NOT_VERIFIED local backup (then
+run `unth verify`); `prune [--dry-run]` applies `offsite.retention`.
 
 ### `unth audit list [--format text|json] [--limit N]`
 Audit trail of backups, verifications and cleanups (no secret values).

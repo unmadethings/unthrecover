@@ -93,12 +93,13 @@ unth run --config examples/backup.yaml   # what you schedule: backup + verify + 
 ```
 
 Scheduling, retention and notifications: [docs/SCHEDULING.md](docs/SCHEDULING.md).
+Offsite copies (Google Cloud Storage, S3, Google Drive, …): [docs/OFFSITE.md](docs/OFFSITE.md).
 Docker volumes: [docs/DOCKER_VOLUME_BACKUP.md](docs/DOCKER_VOLUME_BACKUP.md) (`unth backup volume`).
 
 Walkthrough with a disposable demo database: [docs/QUICKSTART.md](docs/QUICKSTART.md).
 All commands: [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md).
 
-## What is supported (M0)
+## What is supported
 
 - PostgreSQL 12 – (your `pg_dump` major) logical backups; **tested in CI with PostgreSQL 12, 13, 14, 15, 16 and 17**
 - Local repository (`--data-dir`, default `~/.local/share/unthrecover`)
@@ -111,18 +112,19 @@ All commands: [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md).
 - Retention policies (`unth prune`; the newest VERIFIED backup is never expired)
 - Webhook (HMAC-signed) and Slack notifications
 - Web management panel (`unth serve`): overview, workloads, backups with the recovery pipeline, reports, activity log; token login, TLS required off-loopback
-- Packages: `.deb`, container image (`ghcr.io/unmadethings/unthrecover`), install script
+- **Offsite copies** to S3-compatible storage (AWS S3, Google Cloud Storage, Cloudflare R2, Backblaze B2, MinIO, …) or any rclone remote (Google Drive, OneDrive, Dropbox, SFTP, …): encrypted with age before upload, Ed25519-signed, downloaded again and proven after every upload, own retention, disaster-recovery `fetch` ([docs/OFFSITE.md](docs/OFFSITE.md))
+- Packages: `.deb`, `.rpm`, Docker Compose file, container image (`ghcr.io/unmadethings/unthrecover`), install script
 
 ## Not implemented yet
 
-S3-compatible storage, encryption, signed manifests,
-production restore, multi-server. See [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md).
+Encryption of the local data directory, production restore (restore *into* your database is
+manual with `pg_restore`), MySQL/MariaDB, multi-server.  See [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md).
 Nothing in this list is partially present behind a flag.
 
 ## Known limitations
 
 - Linux only (the host must reach Docker bridge networks).
-- Artifacts are **not encrypted** and checksums are **not signatures** — protect the data directory. See [docs/BACKUP_SECURITY.md](docs/BACKUP_SECURITY.md).
+- The local data directory is **not encrypted** and its checksums are **not signatures** — protect it with file permissions. Offsite copies are encrypted and signed. See [docs/BACKUP_SECURITY.md](docs/BACKUP_SECURITY.md).
 - Roles, ownership, privileges and cluster settings are not part of a single-database dump and are not verified.
 - Docker socket access is root-equivalent. See [docs/SECURITY_THREAT_MODEL.md](docs/SECURITY_THREAT_MODEL.md).
 

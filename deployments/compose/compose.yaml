@@ -13,6 +13,13 @@
 #    Panel: http://127.0.0.1:8484 (only from this machine; log in with UNTH_UI_TOKEN).
 #    Logs:  docker compose logs -f scheduler
 #
+# Offsite copies (Google Cloud Storage, S3, Google Drive, ...; docs/OFFSITE.md):
+#      mkdir -p keys rclone && sudo chown 10001:10001 keys rclone
+#      docker compose run --rm scheduler keys generate --dir /etc/unth/keys
+#    (keys are written to ./keys; keep a copy of keys/age.key somewhere safe), then add
+#    encryption/signing/offsite to the job. For Google Drive, put rclone.conf in ./rclone
+#    (owner uid 10001, chmod 600) and use  rclone_config: /etc/unth/rclone/rclone.conf
+#
 # The database must be reachable from the scheduler. If it runs in another Compose project
 # (or in Coolify/Dokploy), add that network below under "networks" and use the database
 # service name as host.
@@ -28,12 +35,15 @@ x-unth: &unth
   environment:
     UNTH_DATA_DIR: /var/lib/unthrecover
     TZ: ${TZ:-UTC}
+    XDG_CACHE_HOME: /tmp
   group_add:
     - "${DOCKER_GID:?set DOCKER_GID in .env: stat -c %g /var/run/docker.sock}"
   volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - unth-data:/var/lib/unthrecover
     - ./jobs:/etc/unth/jobs:ro
+    - ./keys:/etc/unth/keys
+    - ./rclone:/etc/unth/rclone
   read_only: true
   tmpfs:
     - /tmp

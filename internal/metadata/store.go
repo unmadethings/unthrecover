@@ -172,6 +172,25 @@ var migrations = []string{
 		outcome TEXT NOT NULL,
 		details TEXT
 	);`,
+	// 2: offsite copies (S3-compatible storage, rclone remotes)
+	`CREATE TABLE offsite_copies (
+		backup_id TEXT NOT NULL REFERENCES backups(id),
+		target TEXT NOT NULL,
+		location TEXT NOT NULL,
+		status TEXT NOT NULL,
+		encrypted INTEGER NOT NULL DEFAULT 0,
+		signed INTEGER NOT NULL DEFAULT 0,
+		size_bytes INTEGER,
+		object_sha256 TEXT,
+		started_at TEXT NOT NULL,
+		uploaded_at TEXT,
+		checked_at TEXT,
+		deleted_at TEXT,
+		error_category TEXT,
+		error_message TEXT,
+		PRIMARY KEY (backup_id, target)
+	);
+	CREATE INDEX idx_offsite_status ON offsite_copies(target, status);`,
 }
 
 func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }

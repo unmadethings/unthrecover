@@ -288,3 +288,33 @@ func TestListenAndTokenPolicy(t *testing.T) {
 		t.Error("token policy")
 	}
 }
+
+func TestOffsiteInAPI(t *testing.T) {
+	_, ts, st := newTestServer(t, false)
+	ctx := context.Background()
+	now := time.Now()
+	_ = st.UpsertCopy(ctx, &metadata.OffsiteCopy{BackupID: "bk-verified-aaaa", Target: "s3://bk", Location: "p/shop/bk-verified-aaaa",
+		Status: metadata.CopyVerified, Encrypted: true, Signed: true, SizeBytes: 900, StartedAt: now, CheckedAt: &now})
+	_ = st.UpsertCopy(ctx, &metadata.OffsiteCopy{BackupID: "bk-verified-aaaa", Target: "rclone:gdrive:", Location: "x",
+		Status: metadata.CopyFailed, StartedAt: now, ErrorCategory: "OFFSITE_FAILED", ErrorMessage: "token hunter2-secret-x refused"})
+	sid := login(t, ts)
+	var ov map[string]any
+	r := do(t, ts, "GET", "/api/overview", "", sid, false)
+	_ = json.NewDecoder(r.Body).Decode(&ov)
+	if ov["offsite_verified_copies"] != float64(1) || ov["last_offsite_check_at"] == nil {
+		t.Fatalf("overview %v", ov)
+	}
+	r = do(t, ts, "GET", "/api/backups/bk-verified-aaaa", "", sid, false)
+	body, _ := io.ReadAll(r.Body)
+	if !strings.Contains(string(body), `"status":"REMOTE_VERIFIED"`) || !strings.Contains(string(body), `"offsite_copies"`) {
+		t.Fatalf("detail %s", body)
+	}
+	if strings.Contains(string(body), "hunter2-secret-x") {
+		t.Fatal("secret in offsite error message")
+	}
+	r = do(t, ts, "GET", "/api/backups/bk-failed-bbbb", "", sid, false)
+	body, _ = io.ReadAll(r.Body)
+	if !strings.Contains(string(body), `"offsite_copies":[]`) {
+		t.Fatalf("empty copies must be [] not null: %s", body)
+	}
+}

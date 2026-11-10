@@ -2,6 +2,10 @@ import type { Backup, Step } from "./api";
 
 const TONE: Record<string, string> = {
   VERIFIED: "ok",
+  REMOTE_VERIFIED: "ok",
+  UPLOADING: "info",
+  UPLOADED: "info",
+  DELETED: "muted",
   BACKUP_CREATED: "info",
   FAILED: "bad",
   CANCELLED: "warn",

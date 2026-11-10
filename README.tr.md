@@ -63,12 +63,13 @@ unth run --config examples/backup.yaml   # zamanlanacak komut: yedek + doğrulam
 ```
 
 Zamanlama, saklama politikası ve bildirimler (İngilizce): [docs/SCHEDULING.md](docs/SCHEDULING.md).
+Uzak kopyalar — Google Cloud Storage, S3, Google Drive (İngilizce): [docs/OFFSITE.md](docs/OFFSITE.md).
 Docker volume yedeği (İngilizce): [docs/DOCKER_VOLUME_BACKUP.md](docs/DOCKER_VOLUME_BACKUP.md) (`unth backup volume`).
 
 Ayrıntılı rehber: [docs/tr/HIZLI_BASLANGIC.md](docs/tr/HIZLI_BASLANGIC.md) ·
 Komut referansı (İngilizce): [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)
 
-## Desteklenenler (M0)
+## Desteklenenler
 
 - PostgreSQL 12 – (`pg_dump` ana sürümünüz) mantıksal yedek; **CI'da PostgreSQL 12, 13, 14, 15, 16 ve 17 ile test edildi**
 - Yerel depo (`--data-dir`), SQLite metadata, versiyonlu migration, denetim kaydı
@@ -80,17 +81,18 @@ Komut referansı (İngilizce): [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)
 - Saklama politikası (`unth prune`; en yeni VERIFIED yedek asla silinmez)
 - Webhook (HMAC imzalı) ve Slack bildirimleri
 - Web yönetim paneli (`unth serve`): genel bakış, iş yükleri, kurtarma adımlarıyla yedekler, raporlar, etkinlik kaydı; token ile giriş, loopback dışında TLS zorunlu
-- Paketler: `.deb`, konteyner imajı (`ghcr.io/unmadethings/unthrecover`), kurulum betiği
+- **Uzak kopyalar**: S3 uyumlu depolama (AWS S3, Google Cloud Storage, Cloudflare R2, Backblaze B2, MinIO, …) veya rclone ile Google Drive, OneDrive, Dropbox, SFTP vb. Kopyalar yüklenmeden önce age ile şifrelenir, Ed25519 ile imzalanır, her yüklemeden sonra geri indirilip doğrulanır; ayrı saklama politikası ve felaket senaryosu için `unth offsite fetch` ([docs/OFFSITE.md](docs/OFFSITE.md), İngilizce)
+- Paketler: `.deb`, `.rpm`, Docker Compose dosyası, konteyner imajı (`ghcr.io/unmadethings/unthrecover`), kurulum betiği
 
 ## Henüz geliştirilmeyenler
 
-S3 uyumlu depolama, şifreleme, imzalı manifest,
-production restore, çoklu sunucu.
+Yerel veri dizininin şifrelenmesi, production restore (kendi veritabanınıza geri yükleme
+şimdilik `pg_restore` ile elle yapılır), MySQL/MariaDB, çoklu sunucu.
 
 ## Bilinen sınırlamalar
 
 - Yalnızca Linux.
-- Yedekler **şifreli değildir**; checksum **imza değildir**. Veri dizinini koruyun.
+- Yerel veri dizini **şifreli değildir**; checksum **imza değildir**. Dizini dosya izinleriyle koruyun. Uzak kopyalar şifreli ve imzalıdır.
 - Roller, sahiplik, yetkiler ve küme ayarları tek veritabanı dump'ına dahil değildir ve doğrulanmaz.
 - Docker soketine erişim root yetkisine eşdeğerdir.
 

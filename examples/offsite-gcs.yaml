@@ -1,0 +1,34 @@
+# Unth Recover job with offsite copies to Google Cloud Storage (S3 interoperability).
+# See docs/OFFSITE.md. Secrets come from the environment, never from this file:
+#   SHOP_DB_PASSWORD, GCS_HMAC_ID, GCS_HMAC_SECRET
+version: 1
+
+source:
+  name: shop-db
+  host: 127.0.0.1
+  port: 5432
+  database: shop
+  user: backup_reader
+  password_env: SHOP_DB_PASSWORD
+
+retention:
+  keep_last: 3            # local copies on this server
+
+encryption:
+  identity_file: /etc/unth/keys/age.key   # unth keys generate --dir /etc/unth/keys
+  # recipients: [age1...]                 # offline recovery key (recommended)
+
+signing:
+  key_file: /etc/unth/keys/sign.key
+
+offsite:
+  type: s3
+  endpoint: https://storage.googleapis.com
+  region: auto
+  bucket: my-company-backups
+  prefix: servers/web1
+  access_key_env: GCS_HMAC_ID
+  secret_key_env: GCS_HMAC_SECRET
+  retention:              # offsite keeps more than the server
+    keep_daily: 30
+    keep_weekly: 12

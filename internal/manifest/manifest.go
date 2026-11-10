@@ -4,8 +4,8 @@
 // SECURITY NOTE: the SHA-256 checksum provides integrity against accidental
 // corruption. It is NOT an authenticity proof: anyone able to modify the
 // artifact can also rewrite the manifest. Unth Recover additionally compares
-// against the checksum stored in the separate metadata database, but signed
-// manifests are a planned (M3) feature. See docs/BACKUP_SECURITY.md.
+// against the checksum stored in the separate metadata database. Offsite copies
+// are encrypted and signed (internal/offsite). See docs/BACKUP_SECURITY.md.
 package manifest
 
 import (

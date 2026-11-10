@@ -12,6 +12,19 @@ versioning: [SemVer](https://semver.org/).
 - `unth schedule --at HH:MM | --every DUR`: built-in scheduler for containers.
 - `unth serve --behind-proxy`: plain HTTP inside a container when a reverse proxy terminates TLS;
   the session cookie is Secure when the proxy reports HTTPS.
+- Offsite copies (`offsite:`): S3-compatible storage (AWS S3, Google Cloud Storage, R2, B2,
+  MinIO, …) and rclone remotes (Google Drive, OneDrive, Dropbox, SFTP, …). `unth run` copies
+  every VERIFIED backup, encrypted with age while streaming, signs `copy.json` with Ed25519,
+  downloads the copy again and proves it (`REMOTE_VERIFIED`) before any pruning; exit code 5
+  when the copy fails. Offsite retention (`offsite.retention`).
+- `unth keys generate`; `unth offsite list|check|push|fetch|prune`; `fetch` is the
+  disaster-recovery path (import on a new machine, then `unth verify`).
+- Panel: offsite copies on the overview and per backup.
+- `compose.yaml` mounts `./keys` and `./rclone` for offsite keys and the rclone configuration.
+- Container image includes rclone 1.75.2 (pinned by SHA-256); `scripts/install-rclone.sh`.
+
+### Changed
+- Metadata schema version 2 (table `offsite_copies`); upgraded automatically.
 
 ## [0.2.0-alpha] — 2026-11-10 — M1 (Self-hosted Community Edition) + M2 web panel preview
 

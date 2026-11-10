@@ -51,6 +51,9 @@ type Config struct {
 	Verification Verification `yaml:"verification"`
 	Retention    Retention    `yaml:"retention"`
 	Notify       []Notifier   `yaml:"notifications"`
+	Offsite      Offsite      `yaml:"offsite"`
+	Encryption   Encryption   `yaml:"encryption"`
+	Signing      Signing      `yaml:"signing"`
 }
 
 // Retention controls `unth prune` and the prune step of `unth run`.
@@ -225,6 +228,7 @@ func (c *Config) ApplyDefaults() {
 	if c.Backup.Timeout == 0 {
 		c.Backup.Timeout = Duration(time.Hour)
 	}
+	c.Offsite.applyDefaults(c.Retention)
 	if c.Backup.MinFreeBytes == 0 {
 		c.Backup.MinFreeBytes = 256 << 20
 	}
@@ -339,6 +343,7 @@ func (c *Config) Validate() error {
 	if err := c.Verification.Validate(); err != nil {
 		add("%s", err.Error())
 	}
+	c.validateOffsite(add)
 	if len(errs) > 0 {
 		return fmt.Errorf("invalid config:\n  - %s", strings.Join(errs, "\n  - "))
 	}
