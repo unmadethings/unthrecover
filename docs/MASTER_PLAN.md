@@ -28,7 +28,7 @@ Status legend: ✅ done and tested · 🟡 partial · ⬜ not started. Updated w
 | Retention (`unth prune`, EXPIRED) | ✅ unit (planner) + integration tests |
 | Scheduling (systemd service/timer, cron) | ✅ templates; `systemd-analyze verify` clean (except binary path not installed in the dev sandbox) |
 | Docker volume backup with consistency policies | ✅ offline/stop policies, archive safety, isolated restore + file comparison; integration tests |
-| Install script with checksum verification | ⬜ |
+| Install script with checksum verification | ✅ `scripts/install.sh`; 6 tests in `make test-install` (CI) |
 | CI matrix PostgreSQL 12–17 | ✅ (done during M0 hardening) |
 
 ## M2 — Web management panel

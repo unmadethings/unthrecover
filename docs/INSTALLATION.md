@@ -25,9 +25,32 @@ cd unthrecover && make build
 sudo install -m 0755 bin/unth /usr/local/bin/unth
 ```
 
-## Release binaries
-No release has been published yet. When `v0.1.0-alpha` is published, binaries for
-linux/amd64 and linux/arm64 plus `SHA256SUMS` will be attached. Verify before installing:
+## Release binaries (install script)
+`scripts/install.sh` downloads the binary for your architecture (linux/amd64, linux/arm64) and
+`SHA256SUMS` from a GitHub release, verifies the checksum, checks that the binary runs, and
+only then installs it atomically. A mismatch or missing checksum entry aborts without
+installing anything (tested in CI: `make test-install`).
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/unmadethings/unthrecover/main/scripts/install.sh
+```
+
+```bash
+less install.sh
+```
+
+```bash
+sudo sh install.sh --version v0.1.0-alpha
+```
+
+Options: `--dir` (default `/usr/local/bin`), `--dry-run`, `--base-url` (mirrors; `https` or
+`file://` only). Without `--version` the latest *published* release is used — there is none
+until the maintainers publish `v0.1.0-alpha`.
+
+The checksum file comes from the same release as the binary, so it protects against corrupted
+or swapped downloads, not against a compromised release; signed checksums are planned.
+
+Manual verification:
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing

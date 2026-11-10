@@ -30,6 +30,8 @@ jobs:
         run: make test-race
       - name: Build
         run: make build && ./bin/unth version
+      - name: Installer tests
+        run: make test-install
       - name: govulncheck
         run: make vuln
       - name: gosec

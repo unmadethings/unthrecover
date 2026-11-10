@@ -67,3 +67,22 @@ match → checksum PASS but run FAILED; plus `Decide()` unit tests).
 6. CI run #2: Go 1.26.0 standard-library vulnerabilities (fixed in 1.26.1+); `toolchain go1.26.10` pinned in go.mod.
 7. PostgreSQL 12 rejected an implicit numeric→bigint return in a test-fixture SQL function (fixture fixed with an explicit cast).
 8. Large-DB test logged a 0 s restore time because it searched compact JSON for a key with a trailing space; now decodes the report.
+
+## M1 (2026-11-10, local; CI results recorded in MASTER_PLAN after the run)
+
+| Area | Result | Test |
+|---|---|---|
+| Webhook delivery, HMAC signature, Slack format, on=failure skip, no redirects, URL policy, URL/secret redaction | **PASS** | `internal/notify` |
+| Retention planner: keep_last/daily/weekly, max_age, newest VERIFIED and in-progress always kept | **PASS** | `internal/retention` |
+| `unth run` end-to-end ×3 with signed webhook (local receiver), prune of the oldest, EXPIRED cannot be verified, no secret leaks | **PASS** | `TestRunJobVerifiesPrunesAndNotifies` |
+| Failed verification → prune skipped, Slack failure message | **PASS** | `TestRunNotVerifiedSkipsPruneAndNotifiesFailure` |
+| Notification failure → exit 4 | **PASS** | `TestRunNotificationFailureExitCode` |
+| Overlapping run refused by lock | **PASS** | `TestRunRefusesOverlappingJob` |
+| Volume backup VERIFIED (owners, modes, symlinks, binary data, sticky dir) | **PASS** | `TestVolumeBackupIsVerified` |
+| `offline` refuses running writer, container untouched | **PASS** | `TestVolumeOfflineRefusesRunningWriter` |
+| `stop` stops/restarts only running mounters, audited | **PASS** | `TestVolumeStopPolicyStopsAndRestartsWriters` |
+| Tampered content and `..` traversal archive with rewritten checksums never VERIFIED; traversal never reaches Docker | **PASS** | `TestVolumeTamperedArchiveIsNeverVerified` |
+| Volume `unth run`, missing volume, type mismatch | **PASS** | `TestVolumeRunJobAndMissingVolume` |
+| Unsafe tar entries (absolute, `..`, outside root, hard link out, duplicate, limits) | **PASS** | `internal/volume` |
+| Installer: install, dry run, tampered binary, missing checksum, invalid version, http base URL | **PASS** | `make test-install` |
+| systemd units | **PASS** (syntax) | `systemd-analyze verify` (only error: binary not installed in sandbox); not run under a real systemd PID 1 |

@@ -5,7 +5,7 @@ DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 PKG     := github.com/unmadethings/unthrecover/internal/buildinfo
 LDFLAGS := -s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).Date=$(DATE)
 
-.PHONY: all build test test-race test-integration lint vuln sec check dist clean
+.PHONY: all build test test-race test-integration test-install lint vuln sec check dist clean
 
 all: check build
 
@@ -20,6 +20,9 @@ test-race: ## Unit tests with the race detector
 
 test-integration: ## End-to-end tests (needs Docker + PostgreSQL client tools)
 	UNTH_INTEGRATION_REQUIRED=$${UNTH_INTEGRATION_REQUIRED:-1} go test -tags integration -count=1 -timeout 30m -v ./tests/integration/...
+
+test-install: ## Test scripts/install.sh against locally built artifacts
+	sh scripts/test-install.sh
 
 lint: ## go vet + gofmt + staticcheck
 	go vet ./...

@@ -18,7 +18,9 @@ versioning: [SemVer](https://semver.org/).
   audited); archive via never-started helper containers; per-file manifest; verification by
   restore into a new isolated volume and full file comparison; unsafe archives rejected.
 - systemd service/timer templates (hardened) and a cron example; docs/SCHEDULING.md.
-- CI: PostgreSQL 12–17 integration matrix; disk-full test runs on CI.
+- `scripts/install.sh`: downloads a release binary + SHA256SUMS, verifies, smoke-runs and
+  installs atomically; refuses mismatches, missing entries, invalid versions and plain http.
+- CI: PostgreSQL 12–17 integration matrix; disk-full test runs on CI; installer tests.
 
 ## [0.1.0-alpha] — draft (M0: PostgreSQL recovery proof)
 
