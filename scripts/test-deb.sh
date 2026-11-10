@@ -20,6 +20,7 @@ docker run --rm --network none --label io.unthrecover.test=deb \
     test "$(stat -c "%a %U:%G" /etc/unth/jobs)" = "750 root:unth" || { echo "bad jobs dir perms"; exit 1; }
     grep -q "^ExecStart=/usr/bin/unth run" /lib/systemd/system/unth@.service || { echo "unit does not use /usr/bin/unth"; exit 1; }
     test -f /lib/systemd/system/unth@.timer
+    grep -q "^ExecStart=/usr/bin/unth agent run" /lib/systemd/system/unth-agent.service || { echo "agent unit missing"; exit 1; }
     /usr/bin/unth version
     su -s /bin/sh unth -c "unth --data-dir /var/lib/unthrecover backup list" >/dev/null
     dpkg -r unthrecover >/dev/null

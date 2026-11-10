@@ -11,6 +11,10 @@ versioning: [SemVer](https://semver.org/).
   own files, folder "Unth Recover Backups"); OAuth with PKCE; token stays on the server (0600),
   revoked on Disconnect. New offsite type `gdrive` (`connection: gdrive`) with native Drive API
   support (resumable uploads) — no rclone needed. A new machine reuses the existing folder.
+- `unth agent enroll|run|status`: connects a server to Unth Recover Cloud (or another control
+  plane) — signed outbound-only protocol (`pkg/agentproto`), managed jobs with secrets encrypted to
+  the server's key, local schedule during outages, Run/Verify now commands, summaries only.
+  `unth-agent.service` in the packages. docs/AGENT.md.
 - Release builds embed the project's Google OAuth client; `UNTH_GOOGLE_CLIENT_ID/_SECRET` and
   `UNTH_GOOGLE_REDIRECT_URL` for own clients.
 

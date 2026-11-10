@@ -20,6 +20,7 @@ docker run --rm --network none --label io.unthrecover.test=rpm \
     test "$(stat -c "%a %U:%G" /etc/unth/jobs)" = "750 root:unth" || { echo "bad jobs dir perms: $(stat -c "%a %U:%G" /etc/unth/jobs)"; exit 1; }
     grep -q "^ExecStart=/usr/bin/unth run" /usr/lib/systemd/system/unth@.service || { echo "unit does not use /usr/bin/unth"; exit 1; }
     test -f /usr/lib/systemd/system/unth@.timer
+    grep -q "^ExecStart=/usr/bin/unth agent run" /usr/lib/systemd/system/unth-agent.service || { echo "agent unit missing"; exit 1; }
     test -f /usr/share/licenses/unthrecover/LICENSE
     /usr/bin/unth version
     chroot --userspec=unth:unth / /usr/bin/unth --data-dir /var/lib/unthrecover backup list >/dev/null  # coreutils; fedora minimal has no su

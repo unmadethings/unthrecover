@@ -20,6 +20,8 @@ install -d -m 0755 "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/lib/systemd/system" \
 install -m 0755 "$BIN" "$ROOT/usr/bin/unth"
 sed 's#/usr/local/bin/unth#/usr/bin/unth#' deployments/systemd/unth@.service > "$ROOT/lib/systemd/system/unth@.service"
 install -m 0644 deployments/systemd/unth@.timer "$ROOT/lib/systemd/system/unth@.timer"
+sed 's#/usr/local/bin/unth#/usr/bin/unth#' deployments/systemd/unth-agent.service > "$ROOT/lib/systemd/system/unth-agent.service"
+chmod 0644 "$ROOT/lib/systemd/system/unth-agent.service"
 chmod 0644 "$ROOT/lib/systemd/system/unth@.service"
 install -m 0644 examples/backup.yaml examples/volume.yaml "$ROOT/usr/share/doc/unthrecover/examples/"
 install -m 0644 deployments/cron/unthrecover.cron "$ROOT/usr/share/doc/unthrecover/examples/"

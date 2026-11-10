@@ -181,6 +181,20 @@ func Load(path string) (*Config, error) {
 
 // Parse decodes configuration bytes. Unknown keys are errors.
 func Parse(raw []byte) (*Config, error) {
+	c, err := ParseUnvalidated(raw)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Validate(); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// ParseUnvalidated decodes (strictly) and applies defaults but does not
+// validate; the caller must call Validate after adjusting the config (the
+// agent injects its own key paths into managed jobs first).
+func ParseUnvalidated(raw []byte) (*Config, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(raw))
 	dec.KnownFields(true)
 	var c Config
@@ -191,9 +205,6 @@ func Parse(raw []byte) (*Config, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 	c.ApplyDefaults()
-	if err := c.Validate(); err != nil {
-		return nil, err
-	}
 	return &c, nil
 }
 

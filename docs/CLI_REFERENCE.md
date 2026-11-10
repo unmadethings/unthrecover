@@ -125,6 +125,9 @@ if not OK); `push <id>` copies an existing VERIFIED backup (exit 5 on failure); 
 disaster recovery — downloads, proves and imports a copy as a NOT_VERIFIED local backup (then
 run `unth verify`); `prune [--dry-run]` applies `offsite.retention`.
 
+### `unth agent enroll --url URL [--token T] | run [--once] | status`
+Connects the server to a control plane (Unth Recover Cloud). See [AGENT.md](AGENT.md).
+
 ### `unth audit list [--format text|json] [--limit N]`
 Audit trail of backups, verifications and cleanups (no secret values).
 

@@ -17,6 +17,7 @@ case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "invalid tag $TAG" >&2; exit 1 
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 sed 's#/usr/local/bin/unth#/usr/bin/unth#' deployments/systemd/unth@.service > "$STAGE/unth@.service"
+sed 's#/usr/local/bin/unth#/usr/bin/unth#' deployments/systemd/unth-agent.service > "$STAGE/unth-agent.service"
 
 # The user exists before files are laid down, so /etc/unth/jobs is owned by
 # group unth in the package itself (rpm -V stays clean).
@@ -72,6 +73,9 @@ contents:
     file_info: {mode: 0755}
   - src: ${STAGE}/unth@.service
     dst: /usr/lib/systemd/system/unth@.service
+    file_info: {mode: 0644}
+  - src: ${STAGE}/unth-agent.service
+    dst: /usr/lib/systemd/system/unth-agent.service
     file_info: {mode: 0644}
   - src: ${PWD}/deployments/systemd/unth@.timer
     dst: /usr/lib/systemd/system/unth@.timer

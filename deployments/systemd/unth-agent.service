@@ -1,0 +1,40 @@
+# Unth Recover agent: keeps this server connected to Unth Recover Cloud (or
+# another control plane). Enroll first:
+#   sudo -u unth env UNTH_DATA_DIR=/var/lib/unthrecover UNTH_ENROLL_TOKEN=<token> \
+#     unth agent enroll --url https://app.unthrecover.com
+# then: systemctl enable --now unth-agent
+[Unit]
+Description=Unth Recover agent (control plane connection, managed jobs)
+Documentation=https://github.com/unmadethings/unthrecover/blob/main/docs/AGENT.md
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=unth
+Group=unth
+SupplementaryGroups=docker
+Environment=UNTH_DATA_DIR=/var/lib/unthrecover
+ExecStart=/usr/local/bin/unth agent run --log-level info
+Restart=always
+RestartSec=30
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/unthrecover
+StateDirectory=unthrecover
+StateDirectoryMode=0700
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+UMask=0077
