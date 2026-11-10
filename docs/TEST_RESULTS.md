@@ -143,3 +143,33 @@ uses the tag (`unthrecover_0.2.0-alpha_amd64.deb`; the package version inside st
 For v0.2.0-alpha the publish workflow renamed the two `SHA256SUMS` entries to the asset with the
 identical hash; no hash was recomputed. v0.2.0-alpha's `.deb` assets therefore keep the
 `0.2.0.alpha` spelling; later releases use the tag spelling.
+
+## v0.3.0-beta candidate (2026-11-10, local; CI and the published release recorded after they complete)
+
+| Area | Result | Test |
+|---|---|---|
+| Full integration suite (real PostgreSQL, Docker, restore sandboxes) | **PASS** 38, SKIP 1 (opt-in large DB) | `go test -tags integration ./tests/integration/...` with `UNTH_TEST_IMAGE` |
+| Offsite S3 end to end (SeaweedFS 3.97 with credential checking): 3 × `unth run` → REMOTE_VERIFIED, encrypted + signed, offsite retention keep_last 2; no table names/hosts/data in stored objects; `offsite list/check`; **fetch on an empty data dir + isolated restore → VERIFIED**; tampered object → DECRYPTION_FAILED (exit 3), fetch refused; wrong secret → exit 5, nothing pruned; no secrets in output | **PASS** | `TestOffsiteS3EndToEnd` |
+| `unth run` through an rclone remote (path used for Google Drive / OneDrive / Dropbox) | **PASS** | `TestOffsiteRcloneRun` |
+| Offsite unit tests: round trip, modified / truncated / appended / swapped / unsigned copies, wrong age identity, wrong signing key, unencrypted copy with encryption configured, corrupt local artifact not copied, interrupted upload cleaned up, unverified backup refused, offsite retention (other workloads untouched, local EXPIRED keeps its copy), offline recovery recipient can fetch, keys never overwritten | **PASS** | `internal/offsite` |
+| rclone backend through the real rclone 1.75.2 binary (copy, list, tamper, fetch, prune) | **PASS** | `TestRcloneBackend` |
+| Offsite configuration validation (encryption required, https, no literal keys, rclone remote cannot start with `-`, …) | **PASS** | `internal/config` |
+| Docker Compose file deployed as documented: scheduler backs up + verifies, panel login, no secrets in logs, no leftovers | **PASS** | `TestComposeDeployment` |
+| Coolify-style database discovered, generated job used unchanged in the unth container → VERIFIED, password never printed | **PASS** | `TestDiscoverJobsCoolify` |
+| Discovery suggestions for Coolify / Dokploy / Compose / plain Docker parse as valid jobs; untrusted labels sanitized; `--write-dir` never overwrites | **PASS** | `internal/discovery` |
+| `unth schedule` usage errors; next-run computation (same day, next day, year rollover) | **PASS** | `internal/cli` |
+| Panel: `--behind-proxy` cookie Secure only with `X-Forwarded-Proto: https`; offsite fields in API, secrets redacted | **PASS** | `internal/web` |
+| `.deb` in clean Debian | **PASS** | `scripts/test-deb.sh` |
+| `.rpm` in clean Rocky Linux 9 (local) and Fedora 41 (CI) incl. `rpm -V` clean | **PASS** (Rocky 9) | `scripts/test-rpm.sh` |
+| `keys generate` in the container with read-only root, no capabilities | **PASS** | manual |
+| Installer | **PASS** 6/6 | `make test-install` |
+| Web build reproducible | **PASS** | `make web` + `git diff` |
+| gosec / staticcheck | **PASS** (gosec 0 issues; new `#nosec` annotations each with a reason) | |
+| govulncheck | **NOT RUN locally** (vuln.go.dev not reachable from the dev sandbox) — runs in CI | |
+| Real Google Cloud Storage, AWS S3, Google Drive accounts | **NOT RUN** (no test accounts) | |
+
+Defects found by these tests and fixed: rclone reader returned "file already closed" after
+end of stream; `offsite fetch` stored an incomplete backup record (`InsertBackup` writes the
+identity only — verification refused it safely; unit test now checks the stored record);
+`test-rpm.sh` used `su`, missing on Fedora images; a negated `grep` in the release smoke test
+would not have failed the step under `set -e`; gosec findings on directory/job file modes.

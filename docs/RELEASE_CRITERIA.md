@@ -33,6 +33,17 @@ The alpha must not be advertised as production-ready.
 | Published as pre-release | ✅ 2026-11-10 |
 | GHCR package public, private vulnerability reporting enabled | ✅ 2026-11-10 |
 
+## `v0.3.0-beta` — Community Edition beta
+| Criterion | Status (2026-11-10) |
+|---|---|
+| CI green on the release commit | ⏳ |
+| Offsite copies proven by download after upload; tampered copies never accepted | ✅ unit + integration (SeaweedFS S3, rclone) |
+| Disaster recovery path: fetch on an empty machine + isolated restore VERIFIED | ✅ `TestOffsiteS3EndToEnd` |
+| Encryption mandatory for offsite copies; no secrets in configs, argv or logs | ✅ tests |
+| Packages: `.deb`, `.rpm`, Compose file, image with rclone | ✅ local (Rocky 9) / ⏳ CI (Fedora 41, image) |
+| Release artifacts + clean-machine test of the published release | ⏳ |
+| Real-provider tests (GCS, AWS S3, Google Drive) | ⏳ need test accounts — documented as not yet tested |
+
 ## `v1.0.0` additionally requires
 Load tests with large databases, documented recovery scenarios, an external security audit,
 upgrade tests across metadata schema versions, and a stable CLI/config contract.

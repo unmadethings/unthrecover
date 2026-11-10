@@ -3,7 +3,7 @@
 All notable changes are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning: [SemVer](https://semver.org/).
 
-## [Unreleased] — v0.3.0-beta
+## [0.3.0-beta] — 2026-11-10 — offsite copies, Coolify/Dokploy, .rpm, Compose
 
 ### Added
 - `.rpm` packages (Fedora, RHEL, Rocky, AlmaLinux), built with nfpm; tested on Rocky Linux 9 and

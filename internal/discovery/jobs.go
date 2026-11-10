@@ -240,7 +240,7 @@ func WriteJobs(dir string, js []JobSuggestion) (written, skipped []string, err e
 	}
 	for _, j := range js {
 		p := filepath.Join(dir, j.Workload+".yaml")
-		f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o640) // #nosec G304 -- operator-chosen directory, validated name
+		f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o640) // #nosec G304 G302 -- operator-chosen dir, validated name; 0640 so group unth can read (no secrets: passwords are password_env)
 		if os.IsExist(err) {
 			skipped = append(skipped, p)
 			continue
