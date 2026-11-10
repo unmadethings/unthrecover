@@ -1,0 +1,10 @@
+# /etc/cron.d/unthrecover — alternative to the systemd timer.
+# Runs the "shop-db" job daily at 02:17 as the unth user (member of the docker group).
+# Secrets come from a 0600 env file; output is appended to a log file.
+# `unth run` takes a per-job lock, so an overlapping run exits with code 1 instead of
+# running twice. Exit codes: 0 verified, 1 failed, 3 not verified, 4 notification failed.
+SHELL=/bin/sh
+PATH=/usr/local/bin:/usr/bin:/bin
+UNTH_DATA_DIR=/var/lib/unthrecover
+
+17 2 * * * unth set -a; . /etc/unth/jobs/shop-db.env; set +a; unth run --config /etc/unth/jobs/shop-db.yaml >> /var/log/unthrecover/shop-db.log 2>&1

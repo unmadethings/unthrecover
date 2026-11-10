@@ -269,6 +269,7 @@ type cfgOpts struct {
 	db, passFile, port, image, pull, timeout string
 	minFree                                  int64
 	queries                                  bool
+	extra                                    string // raw YAML appended at top level
 }
 
 func (e *env) config(o cfgOpts) string {
@@ -303,6 +304,7 @@ func (e *env) config(o cfgOpts) string {
 		b.WriteString("  queries:\n    - name: paid_total\n      sql: SELECT sum(total_cents) FROM orders WHERE status = 'paid'\n" +
 			"    - name: invoice_amounts\n      sql: SELECT order_id, amount FROM billing.invoices WHERE order_id % 97 = 0\n")
 	}
+	b.WriteString(o.extra)
 	p := filepath.Join(e.t.TempDir(), "job.yaml")
 	if err := os.WriteFile(p, []byte(b.String()), 0o600); err != nil {
 		e.t.Fatal(err)

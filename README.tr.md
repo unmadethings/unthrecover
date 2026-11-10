@@ -59,7 +59,10 @@ unth backup postgres --config examples/backup.yaml
 unth backup list
 unth verify <backup-id>              # çıkış kodu 0 = VERIFIED, 3 = doğrulanamadı
 unth report <backup-id> --format json
+unth run --config examples/backup.yaml   # zamanlanacak komut: yedek + doğrulama + saklama + bildirim
 ```
+
+Zamanlama, saklama politikası ve bildirimler (İngilizce): [docs/SCHEDULING.md](docs/SCHEDULING.md).
 
 Ayrıntılı rehber: [docs/tr/HIZLI_BASLANGIC.md](docs/tr/HIZLI_BASLANGIC.md) ·
 Komut referansı (İngilizce): [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)
@@ -71,11 +74,14 @@ Komut referansı (İngilizce): [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)
 - Docker'da izole restore testi, JSON ve metin raporları
 - Docker ve PostgreSQL için salt-okunur keşif
 - Kesintiye uğramış işlemlerin kurtarılması (`unth cleanup`)
+- Zamanlanmış işler: `unth run` (yedek → doğrulama → saklama politikası → bildirim), systemd/cron şablonları
+- Saklama politikası (`unth prune`; en yeni VERIFIED yedek asla silinmez)
+- Webhook (HMAC imzalı) ve Slack bildirimleri
 
 ## Henüz geliştirilmeyenler
 
-Docker volume yedeği, S3 uyumlu depolama, şifreleme, imzalı manifest, zamanlama,
-saklama politikaları, web arayüzü, production restore, çoklu sunucu.
+Docker volume yedeği, S3 uyumlu depolama, şifreleme, imzalı manifest, web arayüzü,
+production restore, çoklu sunucu.
 
 ## Bilinen sınırlamalar
 

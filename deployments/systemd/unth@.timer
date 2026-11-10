@@ -1,0 +1,15 @@
+# Schedule for unth@<job>.service. Default: once a day at a random time in
+# the first two hours after 01:00. Override with
+#   systemctl edit unth@<job>.timer
+# e.g. [Timer]\nOnCalendar=\nOnCalendar=*-*-* 03:30
+[Unit]
+Description=Schedule for Unth Recover job %i
+
+[Timer]
+OnCalendar=*-*-* 01:00
+RandomizedDelaySec=2h
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

@@ -20,6 +20,7 @@ Environment: `DOCKER_HOST` (only `unix://` sockets are accepted), `UNTH_DATA_DIR
 | 1 | Operation failed (backup failed, Docker unreachable, doctor found failures, …) |
 | 2 | Usage or configuration error, unknown backup/run ID |
 | 3 | `verify` completed but the backup is **not** verified (`FAILED`) |
+| 4 | `run`: job succeeded but a notification could not be delivered |
 | 130 | Cancelled (SIGINT/SIGTERM) |
 
 ## Commands
@@ -72,6 +73,15 @@ Interrupted-operation recovery. Marks backups/runs whose owning process is gone 
 `io.unthrecover.managed=true` that belong to inactive runs. Never touches unlabeled resources.
 Idempotent.
 
+### `unth run --config FILE [--format text|json]`
+The command to schedule: per-job lock → backup → verify → prune (only if verified) →
+notify. Exit codes 0/1/3/4/130 as above. See [SCHEDULING.md](SCHEDULING.md).
+
+### `unth prune --config FILE [--dry-run] [--format text|json]`
+Applies the job's `retention:` rules to its workload. Expired backups lose their artifact
+directory and become `EXPIRED`; history is kept. The newest VERIFIED backup is never expired.
+Exit 2 if no retention rules are configured.
+
 ### `unth audit list [--format text|json] [--limit N]`
 Audit trail of backups, verifications and cleanups (no secret values).
 
@@ -98,3 +108,9 @@ literal `password` key is rejected: use `password_env` or `password_file` (must 
 | `verification.memory_mb` / `cpus` / `pids_limit` | `1024` / `1.0` / `512` | Sandbox limits |
 | `verification.table_hash_max_rows` | `100000` | Tables up to this size get a full content hash |
 | `verification.queries[]` | — | `{name, sql}` read-only assertions |
+| `retention.keep_last` / `keep_daily` / `keep_weekly` | — | See [SCHEDULING.md](SCHEDULING.md) |
+| `retention.max_age` | — | e.g. `2160h`; minimum `1h` |
+| `notifications[].name` / `type` | — | `type`: `webhook` or `slack` |
+| `notifications[].url_env` | — | Env var holding the URL (required; URLs are secrets) |
+| `notifications[].secret_env` | — | Optional HMAC-SHA256 key (webhook only) |
+| `notifications[].on` / `timeout` | `failure` / `10s` | `failure` or `always`; 1s–1m |

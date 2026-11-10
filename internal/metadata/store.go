@@ -26,7 +26,7 @@ const (
 	BackupCreated  = "BACKUP_CREATED"
 	BackupFailed   = "FAILED"
 	BackupCanceled = "CANCELLED"
-	BackupExpired  = "EXPIRED" // reserved for retention (not used in M0)
+	BackupExpired  = "EXPIRED" // artifact removed by retention (`unth prune`)
 )
 
 // Verification statuses. VERIFIED is only ever written by the verification
@@ -277,6 +277,24 @@ func (s *Store) ListBackups(ctx context.Context, limit int) ([]*Backup, error) {
 		limit = 100
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT `+backupCols+` FROM backups ORDER BY created_at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*Backup
+	for rows.Next() {
+		b, err := scanBackup(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// ListBackupsByWorkload returns all backups of a workload, newest first.
+func (s *Store) ListBackupsByWorkload(ctx context.Context, workload string) ([]*Backup, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+backupCols+` FROM backups WHERE workload_id=? ORDER BY created_at DESC`, workload)
 	if err != nil {
 		return nil, err
 	}

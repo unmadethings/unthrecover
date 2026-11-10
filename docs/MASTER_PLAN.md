@@ -19,10 +19,17 @@ Status legend: ✅ done and tested · 🟡 partial · ⬜ not started. Updated w
 | Docs EN + TR | consistent with CLI | ✅ (TR: README + quickstart) |
 | `v0.1.0-alpha` release | see RELEASE_CRITERIA | ⬜ ready to tag (awaiting maintainer decision) |
 
-## M1 — Self-hosted Community Edition
-Docker volume backup with consistency policies (stop / quiesce hooks / refuse for databases),
-retention, scheduling (systemd timer / built-in), install packages, better error recovery.
-(CI matrix for PostgreSQL 12–17: ✅ done during M0 hardening.)
+## M1 — Self-hosted Community Edition (in progress)
+
+| Work package | Status |
+|---|---|
+| Notifications (webhook + HMAC, Slack) | ✅ unit + integration tests |
+| `unth run` (lock → backup → verify → prune → notify) | ✅ integration tests (success, not-verified, notify failure, overlap) |
+| Retention (`unth prune`, EXPIRED) | ✅ unit (planner) + integration tests |
+| Scheduling (systemd service/timer, cron) | ✅ templates; `systemd-analyze verify` clean (except binary path not installed in the dev sandbox) |
+| Docker volume backup with consistency policies | ⬜ |
+| Install script with checksum verification | ⬜ |
+| CI matrix PostgreSQL 12–17 | ✅ (done during M0 hardening) |
 
 ## M2 — Web management panel
 React + TypeScript + Vite; Overview, Infrastructure, Workloads, Backups, Recovery Tests,

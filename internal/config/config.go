@@ -49,7 +49,44 @@ type Config struct {
 	Source       Source       `yaml:"source"`
 	Backup       Backup       `yaml:"backup"`
 	Verification Verification `yaml:"verification"`
+	Retention    Retention    `yaml:"retention"`
+	Notify       []Notifier   `yaml:"notifications"`
 }
+
+// Retention controls `unth prune` and the prune step of `unth run`.
+// Backups matched by ANY keep rule are kept. The newest VERIFIED backup of a
+// workload is always kept, whatever the rules say.
+type Retention struct {
+	KeepLast   int      `yaml:"keep_last"`
+	KeepDaily  int      `yaml:"keep_daily"`
+	KeepWeekly int      `yaml:"keep_weekly"`
+	MaxAge     Duration `yaml:"max_age"`
+}
+
+// Enabled reports whether any retention rule is configured.
+func (r Retention) Enabled() bool {
+	return r.KeepLast > 0 || r.KeepDaily > 0 || r.KeepWeekly > 0 || r.MaxAge > 0
+}
+
+// Notifier sends the result of `unth run` to an HTTP endpoint. The URL and the
+// signing secret are read from environment variables because webhook URLs
+// (e.g. Slack) are themselves credentials.
+type Notifier struct {
+	Name      string   `yaml:"name"`
+	Type      string   `yaml:"type"`       // webhook | slack
+	URLEnv    string   `yaml:"url_env"`    // env var holding the URL
+	SecretEnv string   `yaml:"secret_env"` // optional HMAC-SHA256 key (webhook only)
+	On        string   `yaml:"on"`         // failure | always
+	Timeout   Duration `yaml:"timeout"`
+}
+
+// Notifier types and triggers.
+const (
+	NotifyWebhook = "webhook"
+	NotifySlack   = "slack"
+	OnFailure     = "failure"
+	OnAlways      = "always"
+)
 
 // Source describes the PostgreSQL database to protect.
 type Source struct {
@@ -165,6 +202,14 @@ func (c *Config) ApplyDefaults() {
 		c.Backup.MinFreeBytes = 256 << 20
 	}
 	c.Verification.ApplyDefaults()
+	for i := range c.Notify {
+		if c.Notify[i].On == "" {
+			c.Notify[i].On = OnFailure
+		}
+		if c.Notify[i].Timeout == 0 {
+			c.Notify[i].Timeout = Duration(10 * time.Second)
+		}
+	}
 }
 
 // ApplyDefaults fills unset verification fields.
@@ -230,6 +275,38 @@ func (c *Config) Validate() error {
 	}
 	if c.Backup.MinFreeBytes < 0 {
 		add("backup.min_free_bytes: must not be negative")
+	}
+	r := c.Retention
+	if r.KeepLast < 0 || r.KeepDaily < 0 || r.KeepWeekly < 0 || r.MaxAge < 0 {
+		add("retention: values must not be negative")
+	}
+	if r.MaxAge > 0 && r.MaxAge.D() < time.Hour {
+		add("retention.max_age: must be at least 1h")
+	}
+	seenN := map[string]bool{}
+	for i, n := range c.Notify {
+		if !namePattern.MatchString(n.Name) {
+			add("notifications[%d].name: required, letters/digits/._- only", i)
+		}
+		if seenN[n.Name] {
+			add("notifications[%d].name: duplicate %q", i, n.Name)
+		}
+		seenN[n.Name] = true
+		if n.Type != NotifyWebhook && n.Type != NotifySlack {
+			add("notifications[%d].type: must be webhook or slack", i)
+		}
+		if !envPattern.MatchString(n.URLEnv) {
+			add("notifications[%d].url_env: required environment variable name (URLs are secrets)", i)
+		}
+		if n.SecretEnv != "" && (!envPattern.MatchString(n.SecretEnv) || n.Type != NotifyWebhook) {
+			add("notifications[%d].secret_env: invalid (only for type webhook)", i)
+		}
+		if n.On != OnFailure && n.On != OnAlways {
+			add("notifications[%d].on: must be failure or always", i)
+		}
+		if n.Timeout.D() < time.Second || n.Timeout.D() > time.Minute {
+			add("notifications[%d].timeout: must be between 1s and 1m", i)
+		}
 	}
 	if err := c.Verification.Validate(); err != nil {
 		add("%s", err.Error())

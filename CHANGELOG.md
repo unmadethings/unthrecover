@@ -3,7 +3,20 @@
 All notable changes are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning: [SemVer](https://semver.org/).
 
-## [Unreleased] — targeted as `v0.1.0-alpha` (M0: PostgreSQL recovery proof)
+## [Unreleased] — M1 (Self-hosted Community Edition)
+
+### Added
+- `unth run`: scheduled job = per-job lock → backup → verify → retention → notify; exit code 4
+  when the job succeeded but a notification failed.
+- `unth prune` and `retention:` (`keep_last`, `keep_daily`, `keep_weekly`, `max_age`); the newest
+  VERIFIED backup and backups under verification are never expired; status `EXPIRED`.
+- Notifications: generic webhook (JSON, optional HMAC-SHA256 signature) and Slack-compatible;
+  URLs/secrets only from environment variables, https required (loopback http allowed),
+  redirects not followed.
+- systemd service/timer templates (hardened) and a cron example; docs/SCHEDULING.md.
+- CI: PostgreSQL 12–17 integration matrix; disk-full test runs on CI.
+
+## [0.1.0-alpha] — draft (M0: PostgreSQL recovery proof)
 
 ### Added
 - `unth` CLI: `version`, `doctor`, `discover docker|postgres`, `backup postgres|list|show`,

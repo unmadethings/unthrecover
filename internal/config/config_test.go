@@ -101,3 +101,46 @@ func TestLoadMissingAndHuge(t *testing.T) {
 		t.Fatal("oversized config must error")
 	}
 }
+
+func TestRetentionAndNotifications(t *testing.T) {
+	good := valid + `retention:
+  keep_last: 7
+  keep_daily: 7
+  max_age: 720h
+notifications:
+  - name: ops
+    type: webhook
+    url_env: OPS_HOOK
+    secret_env: OPS_SECRET
+  - name: chat
+    type: slack
+    url_env: SLACK_HOOK
+    on: always
+`
+	c, err := Parse([]byte(good))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Retention.Enabled() || c.Notify[0].On != OnFailure || c.Notify[0].Timeout.D() != 10*time.Second {
+		t.Fatalf("defaults: %+v %+v", c.Retention, c.Notify)
+	}
+	bad := map[string]string{
+		"negative keep":   valid + "retention:\n  keep_last: -1\n",
+		"short max_age":   valid + "retention:\n  max_age: 10m\n",
+		"url literal":     valid + "notifications:\n  - name: a\n    type: webhook\n    url: https://x\n",
+		"missing url_env": valid + "notifications:\n  - name: a\n    type: webhook\n",
+		"bad type":        valid + "notifications:\n  - name: a\n    type: email\n    url_env: X\n",
+		"slack secret":    valid + "notifications:\n  - name: a\n    type: slack\n    url_env: X\n    secret_env: Y\n",
+		"bad on":          valid + "notifications:\n  - name: a\n    type: webhook\n    url_env: X\n    on: sometimes\n",
+		"dup name":        valid + "notifications:\n  - name: a\n    type: webhook\n    url_env: X\n  - name: a\n    type: slack\n    url_env: Y\n",
+		"long timeout":    valid + "notifications:\n  - name: a\n    type: webhook\n    url_env: X\n    timeout: 5m\n",
+	}
+	for name, raw := range bad {
+		if _, err := Parse([]byte(raw)); err == nil {
+			t.Errorf("%s: expected error", name)
+		}
+	}
+	if (Retention{}).Enabled() {
+		t.Fatal("empty retention enabled")
+	}
+}
