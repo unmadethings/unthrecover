@@ -1,0 +1,119 @@
+name: Publish release
+
+# Publishes a DRAFT release (after a maintainer approved it) and smoke-tests the
+# published binary on a clean runner. Run manually:
+#   tag      - existing draft release tag, e.g. v0.1.0-alpha
+#   publish  - false = only run the clean-machine smoke test
+# Release notes are taken from .github/release-notes/<tag>.md on the default branch.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Draft release tag to publish"
+        required: true
+        type: string
+      publish:
+        description: "Publish the draft (false = smoke test only)"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: inputs.publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate tag
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "invalid tag"; exit 1; }
+          test -f ".github/release-notes/$TAG.md" || { echo "missing release notes"; exit 1; }
+      - name: Publish draft
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+                 --jq ".[] | select(.tag_name == \"$TAG\" and .draft) | .id" | head -n1)
+          [ -n "$id" ] || { echo "no draft release for $TAG"; exit 1; }
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" \
+            -F draft=false -F prerelease=true -f make_latest=false \
+            -F "body=@.github/release-notes/$TAG.md" --jq '.html_url'
+          git ls-remote --exit-code --tags origin "refs/tags/$TAG"
+
+  smoke:
+    needs: publish
+    if: always() && (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v5   # only for the installer script and the synthetic dataset
+      - name: Download published assets
+        run: |
+          mkdir -p "rel/$TAG"
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -D "rel/$TAG"
+          ls -l "rel/$TAG"
+          (cd "rel/$TAG" && sha256sum -c SHA256SUMS)
+      - name: Install with scripts/install.sh (checksum-verified)
+        run: |
+          mkdir -p "$HOME/bin"
+          sh scripts/install.sh --version "$TAG" --dir "$HOME/bin" --base-url "file://$PWD/rel"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: PostgreSQL client tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+      - name: Version and doctor
+        run: |
+          unth version | tee /dev/stderr | grep -q "$TAG"
+          unth --data-dir "$RUNNER_TEMP/data" doctor
+      - name: End-to-end recovery proof with the released binary
+        run: |
+          set -euo pipefail
+          export UNTH_DATA_DIR="$RUNNER_TEMP/data"
+          openssl rand -hex 16 > "$RUNNER_TEMP/src.pass"; chmod 600 "$RUNNER_TEMP/src.pass"
+          docker run -d --name smoke-src --label io.unthrecover.test=smoke \
+            -e POSTGRES_PASSWORD="$(cat "$RUNNER_TEMP/src.pass")" -e POSTGRES_DB=shop -p 127.0.0.1:55432:5432 postgres:16-alpine
+          for i in $(seq 1 60); do
+            PGPASSWORD="$(cat "$RUNNER_TEMP/src.pass")" psql -h 127.0.0.1 -p 55432 -U postgres -d shop -c 'select 1' >/dev/null 2>&1 && break; sleep 1
+          done
+          PGPASSWORD="$(cat "$RUNNER_TEMP/src.pass")" psql -q -h 127.0.0.1 -p 55432 -U postgres -d shop -v ON_ERROR_STOP=1 -f tests/fixtures/seed.sql
+          cat > "$RUNNER_TEMP/job.yaml" <<EOF
+          version: 1
+          source:
+            name: smoke-shop
+            host: 127.0.0.1
+            port: 55432
+            database: shop
+            user: postgres
+            password_file: $RUNNER_TEMP/src.pass
+            sslmode: disable
+          verification:
+            restore_image: postgres:16-alpine
+            queries:
+              - name: paid_total
+                sql: SELECT sum(total_cents) FROM orders WHERE status = 'paid'
+          EOF
+          unth discover postgres --config "$RUNNER_TEMP/job.yaml"
+          id=$(unth backup postgres --config "$RUNNER_TEMP/job.yaml" --format json | jq -r .id)
+          unth verify "$id"
+          unth report "$id" --format json | jq -e '.final_status == "VERIFIED"'
+          # corrupted artifact must never be verified
+          printf 'x' | dd of="$UNTH_DATA_DIR/backups/$id/artifact.dump" bs=1 seek=1000 conv=notrunc 2>/dev/null
+          set +e; unth verify "$id"; code=$?; set -e
+          [ "$code" -eq 3 ] || { echo "corrupted backup: expected exit 3, got $code"; exit 1; }
+          unth cleanup
+      - name: Leftover resource check
+        if: always()
+        run: |
+          docker rm -f -v smoke-src >/dev/null 2>&1 || true
+          left=$(docker ps -aq --filter label=io.unthrecover.managed=true; docker volume ls -q --filter label=io.unthrecover.managed=true; docker network ls -q --filter label=io.unthrecover.managed=true)
+          if [ -n "$left" ]; then echo "Leftover resources: $left"; exit 1; fi

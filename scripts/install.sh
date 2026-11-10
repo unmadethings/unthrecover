@@ -56,7 +56,7 @@ if [ -z "$VERSION" ]; then
   VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
     | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1) \
     || die "cannot determine the latest release (use --version)"
-  [ -n "$VERSION" ] || die "no published release found (use --version)"
+  [ -n "$VERSION" ] || die "no published stable release found; pre-releases need --version"
 fi
 case "$VERSION" in
   v[0-9]*) ;;
