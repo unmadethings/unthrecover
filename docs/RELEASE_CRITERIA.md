@@ -36,12 +36,13 @@ The alpha must not be advertised as production-ready.
 ## `v0.3.0-beta` — Community Edition beta
 | Criterion | Status (2026-11-10) |
 |---|---|
-| CI green on the release commit | ⏳ |
+| CI green on the release commit | ✅ run #29 (852f551), 11/11 jobs |
 | Offsite copies proven by download after upload; tampered copies never accepted | ✅ unit + integration (SeaweedFS S3, rclone) |
 | Disaster recovery path: fetch on an empty machine + isolated restore VERIFIED | ✅ `TestOffsiteS3EndToEnd` |
 | Encryption mandatory for offsite copies; no secrets in configs, argv or logs | ✅ tests |
-| Packages: `.deb`, `.rpm`, Compose file, image with rclone | ✅ local (Rocky 9) / ⏳ CI (Fedora 41, image) |
-| Release artifacts + clean-machine test of the published release | ⏳ |
+| Packages: `.deb`, `.rpm`, Compose file, image with rclone | ✅ CI (Debian, Rocky 9, Fedora 41, image) and clean runner |
+| Release artifacts + clean-machine test of the published release | ✅ release run #4, publish-release run #6 |
+| Published | ✅ 2026-11-10 (pre-release) |
 | Real-provider tests (GCS, AWS S3, Google Drive) | ⏳ need test accounts — documented as not yet tested |
 
 ## `v1.0.0` additionally requires

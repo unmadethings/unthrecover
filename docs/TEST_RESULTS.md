@@ -179,3 +179,22 @@ migrations now run in one `BEGIN IMMEDIATE` transaction, regression test
 `TestConcurrentOpenMigratesOnce` (fails on the old code, passes now); and a test race where the
 seed ran against PostgreSQL's temporary initdb server. `build-rpm.sh` now pins the Go toolchain
 for nfpm (it otherwise downloaded the newest patch release).
+
+## Release v0.3.0-beta — build, publish and clean-machine test (2026-11-10)
+
+CI run #29 on 852f551: all 11 jobs green — https://github.com/unmadethings/unthrecover/actions/runs/42862060355
+Release build: release run #4 — https://github.com/unmadethings/unthrecover/actions/runs/42865360720 (binaries, `.deb`, `.rpm`, `compose.yaml`, SHA256SUMS, multi-arch GHCR image).
+Clean-machine test: publish-release run #6 — https://github.com/unmadethings/unthrecover/actions/runs/42868132530
+
+| Check | Result |
+|---|---|
+| All 8 published assets match `SHA256SUMS` (incl. `.rpm` and `compose.yaml`) | **PASS** |
+| `install.sh --version v0.3.0-beta` on a fresh runner; `version`, `doctor` | **PASS** |
+| Backup + verify on PostgreSQL 16 → VERIFIED; corrupted artifact → FAILED, exit 3 | **PASS** |
+| `unth run` ×2 with `keep_last: 1` → older EXPIRED; panel login, token not logged | **PASS** |
+| `.deb` on Ubuntu 24.04; `.rpm` in clean Rocky Linux 9 | **PASS** |
+| `compose.yaml` pins `ghcr.io/unmadethings/unthrecover:v0.3.0-beta` and validates | **PASS** |
+| Released binary: `keys generate`, `unth run` with encrypted + signed offsite copy to an rclone remote → REMOTE_VERIFIED; `offsite fetch` into an empty data dir (signature valid) → `unth verify` → **VERIFIED**; no plaintext dump on the remote | **PASS** |
+| GHCR image: PostgreSQL clients 13–17, rclone v1.75.2 | **PASS** |
+| Anonymous pull of the image (manifest without login) | **PASS** (HTTP 200) |
+| No leftover managed resources | **PASS** |
