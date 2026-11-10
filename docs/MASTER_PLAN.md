@@ -19,7 +19,7 @@ Status legend: ✅ done and tested · 🟡 partial · ⬜ not started. Updated w
 | Docs EN + TR | consistent with CLI | ✅ (TR: README + quickstart) |
 | `v0.1.0-alpha` release | see RELEASE_CRITERIA | ⬜ ready to tag (awaiting maintainer decision) |
 
-## M1 — Self-hosted Community Edition (in progress)
+## M1 — Self-hosted Community Edition (core done; CI green: run #11, https://github.com/unmadethings/unthrecover/actions/runs/42729470008)
 
 | Work package | Status |
 |---|---|
@@ -30,6 +30,9 @@ Status legend: ✅ done and tested · 🟡 partial · ⬜ not started. Updated w
 | Docker volume backup with consistency policies | ✅ offline/stop policies, archive safety, isolated restore + file comparison; integration tests |
 | Install script with checksum verification | ✅ `scripts/install.sh`; 6 tests in `make test-install` (CI) |
 | CI matrix PostgreSQL 12–17 | ✅ (done during M0 hardening) |
+
+Remaining for the M1 release (`v0.2.0-alpha`): packaging (.deb), a Docker image for `unth`
+itself, and user interviews before M2.
 
 ## M2 — Web management panel
 React + TypeScript + Vite; Overview, Infrastructure, Workloads, Backups, Recovery Tests,

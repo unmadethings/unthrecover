@@ -68,7 +68,7 @@ match → checksum PASS but run FAILED; plus `Decide()` unit tests).
 7. PostgreSQL 12 rejected an implicit numeric→bigint return in a test-fixture SQL function (fixture fixed with an explicit cast).
 8. Large-DB test logged a 0 s restore time because it searched compact JSON for a key with a trailing space; now decodes the report.
 
-## M1 (2026-11-10, local; CI results recorded in MASTER_PLAN after the run)
+## M1 (2026-11-10) — local and CI (run #11, PostgreSQL 12–17 matrix + installer tests: https://github.com/unmadethings/unthrecover/actions/runs/42729470008)
 
 | Area | Result | Test |
 |---|---|---|
