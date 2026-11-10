@@ -87,35 +87,46 @@ func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
 	return v, err
 }
 
-func (s *Store) migrate(ctx context.Context) error {
-	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
+// migrate applies pending migrations. Several unth processes may open a new
+// data directory at the same moment (e.g. the scheduler and the panel of the
+// Compose deployment), so the version check and all migrations run inside one
+// BEGIN IMMEDIATE transaction: the first process migrates, the others wait
+// (busy_timeout) and then find nothing left to do.
+func (s *Store) migrate(ctx context.Context) (err error) {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return fmt.Errorf("lock metadata db for migration: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_, _ = conn.ExecContext(context.WithoutCancel(ctx), "ROLLBACK")
+		}
+	}()
+	if _, err := conn.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
 		version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`); err != nil {
 		return fmt.Errorf("migrations table: %w", err)
 	}
-	current, err := s.SchemaVersion(ctx)
-	if err != nil {
+	var current int
+	if err := conn.QueryRowContext(ctx, `SELECT COALESCE(MAX(version),0) FROM schema_migrations`).Scan(&current); err != nil {
 		return err
 	}
 	if current > len(migrations) {
 		return fmt.Errorf("metadata schema version %d is newer than this binary supports (%d); upgrade unth", current, len(migrations))
 	}
 	for i := current; i < len(migrations); i++ {
-		tx, err := s.db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, migrations[i]); err != nil {
-			_ = tx.Rollback()
+		if _, err := conn.ExecContext(ctx, migrations[i]); err != nil {
 			return fmt.Errorf("migration %d: %w", i+1, err)
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`,
-			i+1, now()); err != nil {
-			_ = tx.Rollback()
+		if _, err := conn.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, i+1, now()); err != nil {
 			return err
 		}
-		if err := tx.Commit(); err != nil {
-			return err
-		}
+	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return fmt.Errorf("commit migrations: %w", err)
 	}
 	return nil
 }

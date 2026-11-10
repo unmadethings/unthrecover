@@ -107,6 +107,9 @@ scripts:
 EOF
 
 OUT="dist/unthrecover_${TAG#v}_${ARCH}.rpm"
-go run "github.com/goreleaser/nfpm/v2/cmd/nfpm@${NFPM_VERSION}" package \
+# Pin the Go toolchain to go.mod's: "go run pkg@version" would otherwise fetch
+# the newest patch release, making the build depend on the day it runs.
+TOOLCHAIN=$(awk '/^toolchain /{print $2}' go.mod)
+GOTOOLCHAIN="$TOOLCHAIN" go run "github.com/goreleaser/nfpm/v2/cmd/nfpm@${NFPM_VERSION}" package \
   --config "$STAGE/nfpm.yaml" --packager rpm --target "$OUT" >/dev/null
 echo "$OUT"

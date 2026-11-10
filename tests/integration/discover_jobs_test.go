@@ -37,15 +37,21 @@ func TestDiscoverJobsCoolify(t *testing.T) {
 		t.Fatalf("start db: %v %s", err, out)
 	}
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", "-v", dbName).Run() })
-	for i := 0; i < 60; i++ {
-		if exec.Command("docker", "exec", dbName, "pg_isready", "-U", "shopuser", "-d", "shop").Run() == nil {
-			break
+	// The official image runs a temporary server during initdb and restarts it;
+	// pg_isready can succeed against the temporary one. Retry the seed until the
+	// final server accepts it.
+	var seedOut []byte
+	seeded := false
+	for i := 0; i < 60 && !seeded; i++ {
+		seedOut, err = exec.Command("docker", "exec", dbName, "psql", "-v", "ON_ERROR_STOP=1", "-U", "shopuser", "-d", "shop", "-c",
+			"CREATE TABLE IF NOT EXISTS items(id int primary key, name text); INSERT INTO items SELECT g, 'item '||g FROM generate_series(1,500) g ON CONFLICT DO NOTHING;").CombinedOutput()
+		seeded = err == nil
+		if !seeded {
+			time.Sleep(time.Second)
 		}
-		time.Sleep(time.Second)
 	}
-	if out, err := exec.Command("docker", "exec", dbName, "psql", "-U", "shopuser", "-d", "shop", "-c",
-		"CREATE TABLE items(id int primary key, name text); INSERT INTO items SELECT g, 'item '||g FROM generate_series(1,500) g;").CombinedOutput(); err != nil {
-		t.Fatalf("seed: %v %s", err, out)
+	if !seeded {
+		t.Fatalf("seed: %v %s", err, seedOut)
 	}
 
 	e := newEnv(t)

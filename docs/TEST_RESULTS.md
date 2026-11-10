@@ -173,3 +173,9 @@ end of stream; `offsite fetch` stored an incomplete backup record (`InsertBackup
 identity only — verification refused it safely; unit test now checks the stored record);
 `test-rpm.sh` used `su`, missing on Fedora images; a negated `grep` in the release smoke test
 would not have failed the step under `set -e`; gosec findings on directory/job file modes.
+CI run #28 found two more: **concurrent first start** of two unth processes on a new data directory
+(Compose: scheduler + panel) raced on the schema migrations ("table backups already exists") —
+migrations now run in one `BEGIN IMMEDIATE` transaction, regression test
+`TestConcurrentOpenMigratesOnce` (fails on the old code, passes now); and a test race where the
+seed ran against PostgreSQL's temporary initdb server. `build-rpm.sh` now pins the Go toolchain
+for nfpm (it otherwise downloaded the newest patch release).

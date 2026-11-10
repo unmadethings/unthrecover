@@ -101,3 +101,38 @@ func TestRejectsNewerSchema(t *testing.T) {
 		t.Fatal("newer schema accepted")
 	}
 }
+
+// Several processes opening a new data dir at once (Compose: scheduler +
+// panel) must not race on the migrations. Found by TestComposeDeployment in CI:
+// "migration 1: table backups already exists".
+func TestConcurrentOpenMigratesOnce(t *testing.T) {
+	dir := t.TempDir()
+	const n = 8
+	errs := make(chan error, n)
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		go func() {
+			<-start
+			st, err := Open(context.Background(), dir)
+			if err == nil {
+				_, err = st.ListBackups(context.Background(), 1)
+				_ = st.Close()
+			}
+			errs <- err
+		}()
+	}
+	close(start)
+	for i := 0; i < n; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent open: %v", err)
+		}
+	}
+	st, err := Open(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if v, err := st.SchemaVersion(context.Background()); err != nil || v != len(migrations) {
+		t.Fatalf("schema version %d %v", v, err)
+	}
+}
