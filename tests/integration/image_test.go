@@ -35,7 +35,12 @@ func TestContainerImageRunsJob(t *testing.T) {
 	_ = os.Chmod(dir, 0o755)
 	pass := filepath.Join(dir, "db.pass")
 	_ = os.WriteFile(pass, []byte(src.Password), 0o600)
-	_ = os.Chown(pass, 10001, 10001)
+	// Hand the 0600 secret to the image's unth user (uid 10001) without
+	// needing root on the host: chown it from a throw-away container.
+	if out, err := exec.Command("docker", "run", "--rm", "--label", "io.unthrecover.test="+sessionLabel, "--network", "none",
+		"-u", "0", "--entrypoint", "chown", "-v", dir+":/d", image, "10001:10001", "/d/db.pass").CombinedOutput(); err != nil {
+		t.Fatalf("chown secret: %v %s", err, out)
+	}
 	vol := testVolume(t)
 	job := fmt.Sprintf(`version: 1
 source:

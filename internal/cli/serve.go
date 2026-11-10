@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -58,12 +59,17 @@ characters. Plain HTTP is only allowed on loopback addresses; anything else need
 			s := &web.Server{Store: store, Repo: r, Docker: dockerClient, Redactor: app.Redactor, Log: app.Log, Token: token, TLS: tls}
 			srv := &http.Server{Addr: listen, Handler: s.Handler(cmd.Context()), ReadHeaderTimeout: 10 * time.Second,
 				ReadTimeout: 30 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 120 * time.Second}
+			// Bind before announcing readiness, so "panel on ..." means the port is open.
+			ln, err := net.Listen("tcp", listen)
+			if err != nil {
+				return fmt.Errorf("listen on %s: %w", listen, err)
+			}
 			errCh := make(chan error, 1)
 			go func() {
 				if tls {
-					errCh <- srv.ListenAndServeTLS(certFile, keyFile)
+					errCh <- srv.ServeTLS(ln, certFile, keyFile)
 				} else {
-					errCh <- srv.ListenAndServe()
+					errCh <- srv.Serve(ln)
 				}
 			}()
 			scheme := "http"
