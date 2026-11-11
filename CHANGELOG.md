@@ -18,6 +18,10 @@ versioning: [SemVer](https://semver.org/).
 - Release builds embed the project's Google OAuth client; `UNTH_GOOGLE_CLIENT_ID/_SECRET` and
   `UNTH_GOOGLE_REDIRECT_URL` for own clients.
 
+### Security
+- Built with Go 1.26.11: fixes GO-2026-6859 (HTTP/1 server crash through a `MaxBytesReader`
+  header race in `net/http`), which affected `unth serve`.
+
 ## [0.3.0-beta] — 2026-11-10 — offsite copies, Coolify/Dokploy, .rpm, Compose
 
 ### Added
