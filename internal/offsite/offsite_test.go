@@ -114,7 +114,19 @@ func newEnv(t *testing.T, encrypt, sign bool) *env {
 	}
 	be := newMem()
 	return &env{store: st, repo: r, keys: k, be: be, dir: keyDir,
-		c: &Copier{Backend: be, Keys: k, Prefix: "unth", Store: st, Repo: r, Actor: "test"}}
+		c: &Copier{Backend: be, Keys: k, Prefix: "unth", Store: st, Repo: r, Actor: "test", TZ: istanbul}}
+}
+
+var istanbul, _ = time.LoadLocation("Europe/Istanbul")
+
+// loc is where the copy of b was stored (from the local record).
+func (e *env) loc(t *testing.T, b *metadata.Backup) string {
+	t.Helper()
+	rec, err := e.store.GetCopy(context.Background(), b.ID, e.c.Backend.Target())
+	if err != nil || rec.Location == "" {
+		t.Fatalf("no copy record for %s: %v", b.ID, err)
+	}
+	return rec.Location
 }
 
 // addBackup creates a VERIFIED backup with a real artifact and manifest.
@@ -162,7 +174,7 @@ func TestCopyEncryptedSignedRoundTrip(t *testing.T) {
 	if rec.Status != metadata.CopyVerified || !rec.Encrypted || !rec.Signed || rec.CheckedAt == nil {
 		t.Fatalf("record %+v", rec)
 	}
-	loc := path.Join("unth", "shop", b.ID)
+	loc := e.loc(t, b)
 	want := []string{"artifact.dump.age", DescriptorName, SignatureName, "manifest.json.age"}
 	keys, _ := e.be.List(ctx, loc+"/")
 	if len(keys) != len(want) {
@@ -267,7 +279,7 @@ func TestTamperedCopiesAreNeverAccepted(t *testing.T) {
 			if _, err := e.c.Copy(ctx, b); err != nil {
 				t.Fatal(err)
 			}
-			loc := path.Join("unth", "shop", b.ID)
+			loc := e.loc(t, b)
 			tc.m(e, loc)
 			_, err := e.c.Check(ctx, b)
 			if err == nil || category(err) != tc.cat {
@@ -319,7 +331,7 @@ func TestWrongKeysAndSwappedCopies(t *testing.T) {
 		t.Fatalf("missing identity: %v", err)
 	}
 	// Copy of b2 moved to b1's location (all objects, valid signature).
-	l1, l2 := path.Join("unth", "shop", b1.ID), path.Join("unth", "shop", b2.ID)
+	l1, l2 := e.loc(t, b1), e.loc(t, b2)
 	for _, n := range []string{"artifact.dump.age", "manifest.json.age", DescriptorName, SignatureName} {
 		e.be.objs[path.Join(l1, n)] = e.be.objs[path.Join(l2, n)]
 	}
@@ -336,7 +348,7 @@ func TestUnencryptedCopyRejectedWhenEncryptionConfigured(t *testing.T) {
 	if err != nil || rec.Encrypted {
 		t.Fatalf("plain copy: %v %+v", err, rec)
 	}
-	if !bytes.Contains(plain.be.objs[path.Join("unth", "shop", b.ID, "artifact.dump")], []byte("CUSTOMER")) {
+	if !bytes.Contains(plain.be.objs[path.Join(plain.loc(t, b), "artifact.dump")], []byte("CUSTOMER")) {
 		t.Fatal("unencrypted copy should contain the plaintext artifact")
 	}
 	enc := newEnv(t, true, false)
@@ -416,7 +428,7 @@ func TestOffsitePrune(t *testing.T) {
 	}
 	for i, b := range bs {
 		rec, _ := e.store.GetCopy(ctx, b.ID, e.be.Target())
-		keys, _ := e.be.List(ctx, path.Join("unth", "shop", b.ID)+"/")
+		keys, _ := e.be.List(ctx, e.loc(t, b)+"/")
 		deleted := i < 2
 		if deleted != (rec.Status == metadata.CopyDeleted) || deleted != (len(keys) == 0) {
 			t.Fatalf("backup %d: status %s, %d objects", i, rec.Status, len(keys))
@@ -485,5 +497,100 @@ func TestRecoveryRecipientCanFetch(t *testing.T) {
 	c := &Copier{Backend: e.be, Keys: recovery.keys, Prefix: "unth", Store: recovery.store, Repo: recovery.repo}
 	if fb, _, err := c.Fetch(ctx, "shop", b.ID); err != nil || fb.SHA256 != b.SHA256 {
 		t.Fatalf("recovery fetch: %v", err)
+	}
+}
+
+func TestDatedCopyFolders(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, true, true)
+	t0 := time.Date(2026, 11, 11, 14, 30, 5, 0, time.UTC) // 17.30 in Istanbul
+	b1 := e.addBackup(t, "shop", t0, "one")
+	b2 := e.addBackup(t, "shop", t0.Add(40*time.Second), "two")                            // same minute
+	b3 := e.addBackup(t, "shop", time.Date(2026, 11, 30, 22, 10, 0, 0, time.UTC), "three") // already December there
+	for _, b := range []*metadata.Backup{b1, b2, b3} {
+		if _, err := e.c.Copy(ctx, b); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for b, want := range map[*metadata.Backup]string{
+		b1: "unth/shop/2026-11/2026-11-11 17.30",
+		b2: "unth/shop/2026-11/2026-11-11 17.30-2",
+		b3: "unth/shop/2026-12/2026-12-01 01.10",
+	} {
+		if got := e.loc(t, b); got != want {
+			t.Fatalf("location %q, want %q", got, want)
+		}
+		if _, err := e.c.Check(ctx, b); err != nil {
+			t.Fatalf("check %s: %v", b.ID, err)
+		}
+	}
+	// A retried copy reuses its folder instead of taking a new one.
+	if _, err := e.c.Copy(ctx, b1); err != nil || e.loc(t, b1) != "unth/shop/2026-11/2026-11-11 17.30" {
+		t.Fatalf("retry: %v %s", err, e.loc(t, b1))
+	}
+	// A new machine knows nothing locally: list and fetch go by copy.json.
+	e2 := newEnv(t, true, true)
+	c2 := &Copier{Backend: e.be, Keys: e.keys, Prefix: "unth", Store: e2.store, Repo: e2.repo}
+	list, err := c2.List(ctx, "shop")
+	if err != nil || len(list) != 3 || list[0].BackupID != b3.ID || list[2].BackupID != b1.ID || list[1].WorkloadID != "shop" {
+		t.Fatalf("list %v %+v", err, list)
+	}
+	fb, _, err := c2.Fetch(ctx, "shop", b2.ID)
+	if err != nil || fb.SHA256 != b2.SHA256 {
+		t.Fatalf("fetch: %v", err)
+	}
+	if cps, _ := e2.store.ListCopies(ctx, b2.ID); len(cps) != 1 || cps[0].Location != "unth/shop/2026-11/2026-11-11 17.30-2" {
+		t.Fatalf("fetched copy record %+v", cps)
+	}
+	if _, _, err := c2.Fetch(ctx, "shop", "bk-does-not-exist"); category(err) != failure.ArtifactMissing {
+		t.Fatalf("missing copy: %v", err)
+	}
+	// A valid copy put into another job's dated folder is not accepted.
+	moved := "unth/billing/2026-11/2026-11-11 17.30"
+	for _, n := range []string{"artifact.dump.age", "manifest.json.age", DescriptorName, SignatureName} {
+		e.be.objs[path.Join(moved, n)] = e.be.objs[path.Join(e.loc(t, b1), n)]
+	}
+	if l, _ := c2.List(ctx, "billing"); len(l) != 1 || l[0].Error == "" || l[0].BackupID != "" {
+		t.Fatalf("moved copy listed as valid: %+v", l)
+	}
+	// Retention deletes by the recorded folder.
+	res, err := e.c.Prune(ctx, "shop", config.Retention{KeepLast: 1}, false)
+	if err != nil || len(res.Deleted) != 2 {
+		t.Fatalf("prune %v %+v", err, res)
+	}
+	if keys, _ := e.be.List(ctx, "unth/shop/2026-11/"); len(keys) != 0 {
+		t.Fatalf("pruned copies left: %v", keys)
+	}
+}
+
+func TestPreV05CopiesStillWork(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, true, true)
+	b := e.addBackup(t, "shop", time.Now().UTC(), secretContent)
+	// Copies made before v0.5 live in <prefix>/<workload>/<backup id>.
+	legacy := path.Join("unth", "shop", b.ID)
+	if err := e.store.UpsertCopy(ctx, &metadata.OffsiteCopy{BackupID: b.ID, Target: e.be.Target(), Location: legacy,
+		Status: metadata.CopyFailed, StartedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.c.Copy(ctx, b); err != nil || e.loc(t, b) != legacy {
+		t.Fatalf("copy at the old location: %v %s", err, e.loc(t, b))
+	}
+	if _, err := e.c.Check(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	e2 := newEnv(t, true, true)
+	c2 := &Copier{Backend: e.be, Keys: e.keys, Prefix: "unth", Store: e2.store, Repo: e2.repo}
+	if l, err := c2.List(ctx, "shop"); err != nil || len(l) != 1 || l[0].BackupID != b.ID || l[0].Error != "" {
+		t.Fatalf("list %v %+v", err, l)
+	}
+	if fb, _, err := c2.Fetch(ctx, "shop", b.ID); err != nil || fb.SHA256 != b.SHA256 {
+		t.Fatalf("fetch: %v", err)
+	}
+	// A check without a local record falls back to the old location too.
+	e3 := newEnv(t, true, true)
+	c3 := &Copier{Backend: e.be, Keys: e.keys, Prefix: "unth", Store: e3.store, Repo: e3.repo}
+	if _, err := c3.Check(ctx, b); err != nil {
+		t.Fatalf("check without record: %v", err)
 	}
 }

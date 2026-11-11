@@ -429,6 +429,34 @@ func (d *GDrive) Delete(ctx context.Context, key string) error {
 	return d.deleteID(ctx, id)
 }
 
+// RemoveEmptyDir deletes the folder at dir (below the root folder) when it
+// has nothing left in it. It reports whether the folder is gone.
+func (d *GDrive) RemoveEmptyDir(ctx context.Context, dir string) (bool, error) {
+	dir = strings.Trim(dir, "/")
+	if dir == "" || dir == "." {
+		return false, nil // never the root folder
+	}
+	id, err := d.dir(ctx, dir, false)
+	if err != nil || id == "" {
+		return id == "", err
+	}
+	kids, err := d.children(ctx, id, "")
+	if err != nil || len(kids) > 0 {
+		return false, err
+	}
+	if err := d.deleteID(ctx, id); err != nil {
+		return false, err
+	}
+	d.mu.Lock()
+	for k := range d.folders {
+		if k == dir || strings.HasPrefix(k, dir+"/") {
+			delete(d.folders, k)
+		}
+	}
+	d.mu.Unlock()
+	return true, nil
+}
+
 func (d *GDrive) deleteID(ctx context.Context, id string) error {
 	resp, err := d.do(ctx, http.MethodDelete, d.g.DriveURL+"/files/"+url.PathEscape(id), nil, nil)
 	if err != nil {

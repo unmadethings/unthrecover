@@ -38,6 +38,17 @@ type Offsite struct {
 	Timeout          Duration  `yaml:"timeout"`           // per copy (upload + check)
 	AllowUnencrypted bool      `yaml:"allow_unencrypted"` // explicitly allow plaintext copies
 	Retention        Retention `yaml:"retention"`         // default: same as the job's retention
+	// TimeZone names the dated copy folders (<job>/2026-11/2026-11-11 17.30),
+	// e.g. Europe/Istanbul. Default: the server's time zone.
+	TimeZone string `yaml:"time_zone"`
+}
+
+// Location returns the time zone for copy folder names (nil: the server's).
+func (o Offsite) Location() (*time.Location, error) {
+	if o.TimeZone == "" {
+		return nil, nil
+	}
+	return time.LoadLocation(o.TimeZone)
 }
 
 // Offsite types.
@@ -166,6 +177,9 @@ func (c *Config) validateOffsite(add func(string, ...any)) {
 		}
 	default:
 		add("offsite.type: must be %q, %q or %q", OffsiteS3, OffsiteRclone, OffsiteGDrive)
+	}
+	if _, err := o.Location(); err != nil || strings.ContainsAny(o.TimeZone, " \\") {
+		add("offsite.time_zone: unknown time zone %q (use a name like Europe/Istanbul or UTC)", o.TimeZone)
 	}
 }
 

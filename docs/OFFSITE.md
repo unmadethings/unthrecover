@@ -29,9 +29,23 @@ If any part of 2–3 fails, the run exits with **code 5**, nothing is pruned (lo
 offsite) and partial uploads are removed. A copy is never reported as stored before it was
 read back and checked.
 
-Layout under `<prefix>/<workload>/<backup-id>/`: `artifact.dump.age` (or `volume.tar.age`),
+Each copy gets a readable, dated folder, by month:
+
+```
+<prefix>/<workload>/2026-11/2026-11-11 17.30/
+<prefix>/<workload>/2026-11/2026-11-11 17.30-2/   (second backup in the same minute)
+```
+
+The time is the backup's creation time in `offsite.time_zone` (an IANA name such as
+`Europe/Istanbul`; default: the server's time zone). Copies made before v0.5 stay in
+`<prefix>/<workload>/<backup-id>/` and remain readable, checkable and fetchable. What a folder
+holds is decided by its signed `copy.json` (backup id, job), never by the folder name, so
+renaming or moving copies cannot pass one backup off as another.
+
+Each folder holds `artifact.dump.age` (or `volume.tar.age`),
 `manifest.json.age`, `copy.json`, `copy.json.sig`. `copy.json` is written last; a folder
-without it is an incomplete copy and is ignored. Only `copy.json` is readable without the
+without it is an incomplete copy and is ignored. On Google Drive, folders emptied by
+retention are removed too. Only `copy.json` is readable without the
 key; it contains ids, times, sizes, hashes and public keys — no host names, table names or data.
 
 ## 1. Keys

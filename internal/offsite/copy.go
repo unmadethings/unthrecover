@@ -88,6 +88,8 @@ type Copier struct {
 	Log     *slog.Logger
 	Actor   string
 	Now     func() time.Time
+	// TZ names the dated copy folders (default: the system time zone).
+	TZ *time.Location
 }
 
 func (c *Copier) now() time.Time {
@@ -97,14 +99,70 @@ func (c *Copier) now() time.Time {
 	return time.Now().UTC()
 }
 
-var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+var (
+	idPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+	monthPattern = regexp.MustCompile(`^\d{4}-\d{2}$`)
+	datePattern  = regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}\.\d{2}(-\d{1,3})?$`)
+)
 
-// Location returns the key prefix of a backup's copy.
+// Location returns where copies were stored before v0.5:
+// <prefix>/<workload>/<backup id>. Such copies stay readable.
 func (c *Copier) Location(workload, backupID string) (string, error) {
 	if !idPattern.MatchString(workload) || !idPattern.MatchString(backupID) {
 		return "", fmt.Errorf("invalid workload or backup id")
 	}
 	return path.Join(c.Prefix, workload, backupID), nil
+}
+
+// newLocation picks a free, readable folder for a new copy:
+// <prefix>/<workload>/<YYYY-MM>/<YYYY-MM-DD HH.MM>, in the copier's time zone,
+// with -2, -3, ... when two backups fall in the same minute. What a copy is
+// comes from its signed copy.json, never from the folder name.
+func (c *Copier) newLocation(ctx context.Context, b *metadata.Backup) (string, error) {
+	if !idPattern.MatchString(b.WorkloadID) || !idPattern.MatchString(b.ID) {
+		return "", fmt.Errorf("invalid workload or backup id")
+	}
+	tz := c.TZ
+	if tz == nil {
+		tz = time.Local
+	}
+	t := b.CreatedAt.In(tz)
+	dir := path.Join(c.Prefix, b.WorkloadID, t.Format("2006-01"))
+	name := t.Format("2006-01-02 15.04")
+	for i := 1; i <= 999; i++ {
+		loc := path.Join(dir, name)
+		if i > 1 {
+			loc = path.Join(dir, fmt.Sprintf("%s-%d", name, i))
+		}
+		keys, err := c.Backend.List(ctx, loc+"/")
+		if err != nil {
+			return "", failure.New(failure.OffsiteFailed, "list "+c.Backend.Target(), err)
+		}
+		if len(keys) == 0 {
+			return loc, nil
+		}
+	}
+	return "", failure.New(failure.OffsiteFailed, "no free copy folder in "+dir, nil)
+}
+
+// locationOf returns where this backup's copy is: the recorded location, or
+// the pre-v0.5 one.
+func (c *Copier) locationOf(ctx context.Context, b *metadata.Backup) (string, error) {
+	if rec, err := c.Store.GetCopy(ctx, b.ID, c.Backend.Target()); err == nil && rec.Location != "" {
+		return rec.Location, nil
+	}
+	return c.Location(b.WorkloadID, b.ID)
+}
+
+// placedRight reports whether loc is a valid folder for the copy d: the old
+// <workload>/<backup id> or the dated <workload>/<YYYY-MM>/<date> layout.
+func placedRight(loc string, d *Descriptor) bool {
+	if path.Base(loc) == d.BackupID && path.Base(path.Dir(loc)) == d.WorkloadID {
+		return true
+	}
+	month := path.Dir(loc)
+	return datePattern.MatchString(path.Base(loc)) && monthPattern.MatchString(path.Base(month)) &&
+		strings.HasPrefix(path.Base(loc), path.Base(month)+"-") && path.Base(path.Dir(month)) == d.WorkloadID
 }
 
 func (c *Copier) audit(ctx context.Context, action, target, outcome, details string) {
@@ -121,8 +179,11 @@ func (c *Copier) Copy(ctx context.Context, b *metadata.Backup) (*metadata.Offsit
 		return nil, failure.New(failure.OffsiteFailed, fmt.Sprintf("backup %s is %s/%s; only VERIFIED backups are copied offsite",
 			b.ID, b.Status, b.VerificationStatus), nil)
 	}
-	loc, err := c.Location(b.WorkloadID, b.ID)
-	if err != nil {
+	var loc string
+	var err error
+	if old, gerr := c.Store.GetCopy(ctx, b.ID, c.Backend.Target()); gerr == nil && old.Location != "" && old.Status != metadata.CopyDeleted {
+		loc = old.Location // a retry overwrites the same folder
+	} else if loc, err = c.newLocation(ctx, b); err != nil {
 		return nil, err
 	}
 	rec := &metadata.OffsiteCopy{BackupID: b.ID, Target: c.Backend.Target(), Location: loc, Status: metadata.CopyUploading,
@@ -288,7 +349,7 @@ type CheckResult struct {
 // configured), stored hashes, decryption, plaintext hashes, and that the
 // artifact equals the locally recorded SHA-256 of the backup.
 func (c *Copier) Check(ctx context.Context, b *metadata.Backup) (*CheckResult, error) {
-	loc, err := c.Location(b.WorkloadID, b.ID)
+	loc, err := c.locationOf(ctx, b)
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +381,7 @@ func (c *Copier) check(ctx context.Context, b *metadata.Backup, loc string, arti
 	}
 	res := &CheckResult{BackupID: d.BackupID, Target: c.Backend.Target(), Location: loc, Encrypted: d.Encrypted,
 		SignatureChecked: sigChecked, SignedBy: d.SignedBy, Descriptor: d}
-	if path.Base(loc) != d.BackupID || path.Base(path.Dir(loc)) != d.WorkloadID {
+	if !placedRight(loc, d) {
 		return nil, failure.New(failure.OffsiteMismatch, "copy.json names a different backup than its location", nil)
 	}
 	if b != nil && (d.BackupID != b.ID || d.WorkloadID != b.WorkloadID) {
@@ -498,10 +559,17 @@ func (c *Copier) List(ctx context.Context, workload string) ([]RemoteCopy, error
 		}
 		loc := path.Dir(k)
 		rc := RemoteCopy{Location: loc, BackupID: path.Base(loc), WorkloadID: path.Base(path.Dir(loc))}
+		if datePattern.MatchString(rc.BackupID) {
+			rc.BackupID, rc.WorkloadID = "", path.Base(path.Dir(path.Dir(loc)))
+		}
 		d, _, err := c.readDescriptor(ctx, loc)
-		if err != nil {
+		switch {
+		case err != nil:
 			rc.Error = err.Error()
-		} else {
+		case !placedRight(loc, d):
+			rc.Error = "copy.json names a different backup than its location"
+		default:
+			rc.BackupID, rc.WorkloadID = d.BackupID, d.WorkloadID
 			rc.CreatedAt, rc.CopiedAt, rc.Encrypted, rc.Signed = d.CreatedAt, d.CopiedAt, d.Encrypted, d.Signed
 			if a, ok := d.object("artifact"); ok {
 				rc.SizeBytes = a.Size
@@ -526,6 +594,15 @@ func (c *Copier) deleteAll(ctx context.Context, loc string) error {
 		}
 		if err := c.Backend.Delete(ctx, k); err != nil {
 			return err
+		}
+	}
+	// Folder-based storage (Google Drive) keeps empty folders: remove the
+	// copy's folder and, when that empties it, the month folder.
+	if p, ok := c.Backend.(interface {
+		RemoveEmptyDir(ctx context.Context, dir string) (bool, error)
+	}); ok {
+		if gone, err := p.RemoveEmptyDir(ctx, loc); err == nil && gone && monthPattern.MatchString(path.Base(path.Dir(loc))) {
+			_, _ = p.RemoveEmptyDir(ctx, path.Dir(loc))
 		}
 	}
 	return nil
@@ -599,7 +676,7 @@ func (c *Copier) Prune(ctx context.Context, workload string, p config.Retention,
 // repository as a NOT_VERIFIED backup (run `unth verify` next). It is the
 // disaster-recovery path on a new machine.
 func (c *Copier) Fetch(ctx context.Context, workload, backupID string) (*metadata.Backup, *CheckResult, error) {
-	loc, err := c.Location(workload, backupID)
+	loc, err := c.findCopy(ctx, workload, backupID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -675,6 +752,38 @@ func (c *Copier) Fetch(ctx context.Context, workload, backupID string) (*metadat
 		ObjectSHA256: art.SHA256, StartedAt: d.CopiedAt, UploadedAt: &d.CopiedAt, CheckedAt: &t})
 	c.audit(ctx, "offsite.fetch", b.ID, "imported", fmt.Sprintf("%s/%s signature_checked=%v", c.Backend.Target(), loc, res.SignatureChecked))
 	return b, res, nil
+}
+
+// findCopy locates a backup's copy on the target: the pre-v0.5 folder, or
+// the dated folder whose copy.json names this backup.
+func (c *Copier) findCopy(ctx context.Context, workload, backupID string) (string, error) {
+	legacy, err := c.Location(workload, backupID)
+	if err != nil {
+		return "", err
+	}
+	if keys, err := c.Backend.List(ctx, legacy+"/"); err == nil && len(keys) > 0 {
+		return legacy, nil
+	}
+	list, err := c.List(ctx, workload)
+	if err != nil {
+		return "", err
+	}
+	for _, rc := range list {
+		if rc.BackupID == backupID && rc.WorkloadID == workload {
+			return rc.Location, nil
+		}
+	}
+	unreadable := 0
+	for _, rc := range list {
+		if rc.Error != "" {
+			unreadable++
+		}
+	}
+	msg := fmt.Sprintf("no copy of %s on %s", backupID, c.Backend.Target())
+	if unreadable > 0 {
+		msg += fmt.Sprintf(" (%d copies could not be read; see `unth offsite list`)", unreadable)
+	}
+	return "", failure.New(failure.ArtifactMissing, msg, nil)
 }
 
 func (c *Copier) importRecord(ctx context.Context, m *manifest.Manifest, dir string) (*metadata.Backup, error) {

@@ -63,5 +63,9 @@ func Open(ctx context.Context, cfg *config.Config, store *metadata.Store, r *rep
 	} else if be, err = OpenBackend(ctx, cfg.Offsite); err != nil {
 		return nil, err
 	}
-	return &Copier{Backend: be, Keys: keys, Prefix: cfg.Offsite.Prefix, Store: store, Repo: r, Actor: actor}, nil
+	tz, err := cfg.Offsite.Location()
+	if err != nil {
+		return nil, failure.New(failure.ConfigInvalid, "offsite.time_zone", err)
+	}
+	return &Copier{Backend: be, Keys: keys, Prefix: cfg.Offsite.Prefix, Store: store, Repo: r, Actor: actor, TZ: tz}, nil
 }

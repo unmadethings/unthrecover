@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"net/url"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -113,7 +114,7 @@ func TestGDriveBackend(t *testing.T) {
 	}
 	var target *fakegoogle.File // the copy of bs[0] (FindByName order is random)
 	for _, f := range arts {
-		if fg.ParentName(f) == bs[0].ID {
+		if fg.ParentName(f) == path.Base(e.loc(t, bs[0])) {
 			target = f
 		}
 	}
@@ -156,6 +157,16 @@ func TestGDriveBackend(t *testing.T) {
 	res, err := e.c.Prune(ctx, "shop", config.Retention{KeepLast: 1}, false)
 	if err != nil || len(res.Deleted) == 0 || fg.Count() >= before {
 		t.Fatalf("prune %v %+v %d->%d", err, res, before, fg.Count())
+	}
+	// No empty dated folders are left behind on Drive.
+	for _, id := range res.Deleted {
+		for _, b := range bs {
+			if b.ID == id {
+				if n := len(fg.FindByName(path.Base(e.loc(t, b)))); n != 0 {
+					t.Fatalf("empty folder of pruned copy %s left on Drive", e.loc(t, b))
+				}
+			}
+		}
 	}
 	// The user removes access in the Google account -> clear error.
 	fg.RevokeAll()

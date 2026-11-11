@@ -52,7 +52,7 @@ func TestRcloneBackend(t *testing.T) {
 		t.Fatalf("list %v %+v", err, list)
 	}
 	// Tamper with a stored object directly on the remote's storage.
-	art := filepath.Join(store, "Unth Backups", "unth", "shop", bs[0].ID, "artifact.dump.age")
+	art := filepath.Join(store, "Unth Backups", filepath.FromSlash(e.loc(t, bs[0])), "artifact.dump.age")
 	raw, err := os.ReadFile(art)
 	if err != nil {
 		t.Fatal(err)

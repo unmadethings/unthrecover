@@ -5,6 +5,14 @@ versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Offsite copies are stored in readable dated folders, by month:
+  `<prefix>/<job>/2026-11/2026-11-11 17.30/` (`-2`, `-3` for backups in the same minute),
+  in `offsite.time_zone` (new, IANA name; default: the server's time zone). Copies are
+  identified by their signed `copy.json`, not by the folder name. Copies made by earlier
+  versions (`<prefix>/<job>/<backup-id>/`) stay readable, checkable and fetchable.
+- Google Drive: folders emptied by offsite retention are removed.
+
 ## [0.4.0-beta] — 2026-11-11 — Google Drive, Unth Recover Cloud agent, security fix
 
 ### Added

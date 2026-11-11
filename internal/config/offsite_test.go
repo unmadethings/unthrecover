@@ -67,11 +67,18 @@ func TestOffsiteRejects(t *testing.T) {
 		"bad recipient":        offsiteBase + s3 + "encryption:\n  identity_file: /k\n  recipients: [age1nope]\n",
 		"sign key and pub":     valid + "signing:\n  key_file: /a\n  public_key_file: /b\n",
 		"timeout too short":    offsiteBase + s3 + "  timeout: 10s\n",
+		"unknown time zone":    offsiteBase + s3 + "  time_zone: Mars/Olympus\n",
+		"time zone file path":  offsiteBase + s3 + "  time_zone: ../../etc/passwd\n",
 	}
 	for name, raw := range cases {
 		if _, err := Parse([]byte(raw)); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+	if c, err := Parse([]byte(offsiteBase + s3 + "  time_zone: Europe/Istanbul\n")); err != nil {
+		t.Fatal(err)
+	} else if tz, _ := c.Offsite.Location(); tz == nil || tz.String() != "Europe/Istanbul" {
+		t.Fatalf("time zone %v", tz)
 	}
 	// allow_unencrypted is an explicit, visible opt-out.
 	if _, err := Parse([]byte(valid + s3 + "  allow_unencrypted: true\n")); err != nil {

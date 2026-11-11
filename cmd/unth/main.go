@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	_ "time/tzdata" // offsite.time_zone works on minimal images without zoneinfo
 
 	"github.com/unmadethings/unthrecover/internal/cli"
 )
