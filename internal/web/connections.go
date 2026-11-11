@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -60,7 +61,87 @@ func (s *Server) listConnections(w http.ResponseWriter, _ *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "cannot read connections")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"google_configured": s.google().Configured(), "connections": list})
+	writeJSON(w, http.StatusOK, map[string]any{"google_configured": s.google().Configured(),
+		"picker_configured": s.google().PickerConfigured(), "connections": list})
+}
+
+// openDrive loads a Google Drive connection for the folder endpoints.
+func (s *Server) openDrive(w http.ResponseWriter, r *http.Request) (*offsite.GDrive, bool) {
+	d, err := offsite.NewGDrive(s.google(), s.conns(), r.PathValue("name"))
+	if errors.Is(err, connections.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "connection not found")
+		return nil, false
+	}
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, s.Redactor.Redact(err.Error()))
+		return nil, false
+	}
+	return d, true
+}
+
+// pickerToken gives the panel what Google's folder picker needs: a
+// short-lived access token (scope drive.file: only files and folders shared
+// with the app), the public API key and the project number. The refresh
+// token never leaves the server.
+func (s *Server) pickerToken(w http.ResponseWriter, r *http.Request) {
+	g := s.google()
+	if !g.PickerConfigured() {
+		writeErr(w, http.StatusConflict, "this build has no Google API key for the folder picker; set UNTH_GOOGLE_API_KEY (docs/OFFSITE.md)")
+		return
+	}
+	d, ok := s.openDrive(w, r)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	tok, err := d.AccessToken(ctx)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, s.Redactor.Redact(err.Error()))
+		return
+	}
+	s.Redactor.Add(tok)
+	s.auditEvent(r.Context(), "connection.gdrive.picker", r.PathValue("name"), "opened", "")
+	writeJSON(w, http.StatusOK, map[string]string{"access_token": tok, "api_key": g.APIKey, "app_id": g.AppID()})
+}
+
+func (s *Server) setFolder(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	d, ok := s.openDrive(w, r)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	name, err := d.UseFolder(ctx, body.ID)
+	if err != nil {
+		s.auditEvent(r.Context(), "connection.gdrive.folder", r.PathValue("name"), "failed", s.Redactor.Redact(err.Error()))
+		writeErr(w, http.StatusBadRequest, s.Redactor.Redact(err.Error()))
+		return
+	}
+	s.auditEvent(r.Context(), "connection.gdrive.folder", r.PathValue("name"), "picked", name)
+	writeJSON(w, http.StatusOK, map[string]string{"folder": name})
+}
+
+func (s *Server) resetFolder(w http.ResponseWriter, r *http.Request) {
+	d, ok := s.openDrive(w, r)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	if err := d.UseDefaultFolder(ctx); err != nil {
+		writeErr(w, http.StatusBadGateway, s.Redactor.Redact(err.Error()))
+		return
+	}
+	s.auditEvent(r.Context(), "connection.gdrive.folder", r.PathValue("name"), "default", connections.DefaultFolderName)
+	writeJSON(w, http.StatusOK, map[string]string{"folder": connections.DefaultFolderName})
 }
 
 func (s *Server) startGDrive(w http.ResponseWriter, r *http.Request) {

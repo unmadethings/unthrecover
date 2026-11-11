@@ -140,14 +140,26 @@ The access token is stored on your server only (`<data-dir>/connections/gdrive.j
 never shown by the panel and never sent anywhere but Google. **Disconnect** in the panel revokes
 it at Google; you can also remove "Unth Recover" in your Google account's security settings.
 
+**Use an existing folder.** Next to the connection, **Choose folder…** opens Google's own
+folder picker (also shared drives). The folder you pick — and only that folder — is shared
+with unth; new copies go into it (`<folder>/<job>/2026-11/2026-11-11 17.30/`). If that folder is
+later deleted, put in the trash or unshared, copies fail with a clear message instead of
+silently going somewhere else; **Use default** goes back to *Unth Recover Backups*. On a shared
+drive where you may not delete files for good, retention moves old copies to the trash.
+
 On a new machine after a disaster, connect the same Google account again: unth finds the
-existing *Unth Recover Backups* folder, and `unth offsite fetch` brings copies back.
+existing *Unth Recover Backups* folder (or choose the same folder again), and
+`unth offsite fetch` brings copies back.
 
 The project's OAuth client is built into release binaries. Self-built binaries, or
 organizations that want their own name on Google's consent screen, set
 `UNTH_GOOGLE_CLIENT_ID` and `UNTH_GOOGLE_CLIENT_SECRET` (a Google Cloud "Desktop app" OAuth
 client with the Drive API enabled; publish it "In production" so tokens do not expire after 7
-days). A panel reached only through a domain needs an own "Web application" client with
+days). The folder picker also needs a browser API key restricted to the **Google Picker API**
+(`UNTH_GOOGLE_API_KEY`; no website restriction — the panel sends no referrer); without it the
+panel offers only the default folder. While the picker is available, the panel's
+Content-Security-Policy also allows `apis.google.com` scripts and a `docs.google.com` frame.
+A panel reached only through a domain needs an own "Web application" client with
 `UNTH_GOOGLE_REDIRECT_URL=https://<panel>/oauth/google/callback` — or the SSH tunnel above.
 
 ## 2d. Google Drive and other drives via rclone

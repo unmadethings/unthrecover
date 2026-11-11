@@ -33,6 +33,7 @@ const Scopes = "https://www.googleapis.com/auth/drive.file openid email"
 type Google struct {
 	ClientID     string
 	ClientSecret string
+	APIKey       string // browser key for Google's folder picker
 	AuthURL      string
 	TokenURL     string
 	UserinfoURL  string
@@ -47,7 +48,7 @@ type Google struct {
 // (loopback URLs only) points all endpoints at a fake server for tests.
 func DefaultGoogle() *Google {
 	g := &Google{ // #nosec G101 -- public endpoint URLs; the client of an installed app is not confidential
-		ClientID: buildinfo.GoogleClientID, ClientSecret: buildinfo.GoogleClientSecret,
+		ClientID: buildinfo.GoogleClientID, ClientSecret: buildinfo.GoogleClientSecret, APIKey: buildinfo.GoogleAPIKey,
 		AuthURL:     "https://accounts.google.com/o/oauth2/v2/auth",
 		TokenURL:    "https://oauth2.googleapis.com/token",
 		UserinfoURL: "https://openidconnect.googleapis.com/v1/userinfo",
@@ -59,6 +60,9 @@ func DefaultGoogle() *Google {
 	if id := os.Getenv("UNTH_GOOGLE_CLIENT_ID"); id != "" {
 		g.ClientID, g.ClientSecret = id, os.Getenv("UNTH_GOOGLE_CLIENT_SECRET")
 	}
+	if k := os.Getenv("UNTH_GOOGLE_API_KEY"); k != "" {
+		g.APIKey = k
+	}
 	if base := os.Getenv("UNTH_GOOGLE_TEST_ENDPOINT"); base != "" && isLoopbackURL(base) {
 		base = strings.TrimSuffix(base, "/")
 		g.AuthURL, g.TokenURL, g.UserinfoURL, g.RevokeURL = base+"/auth", base+"/token", base+"/userinfo", base+"/revoke"
@@ -69,6 +73,20 @@ func DefaultGoogle() *Google {
 
 // Configured reports whether an OAuth client is available.
 func (g *Google) Configured() bool { return g.ClientID != "" && g.ClientSecret != "" }
+
+// AppID is the Cloud project number, the numeric start of the OAuth client
+// ID ("123456789012-abc.apps.googleusercontent.com"). Google's picker needs
+// it so that a folder the user picks is shared with this app (drive.file).
+func (g *Google) AppID() string {
+	n, _, ok := strings.Cut(g.ClientID, "-")
+	if !ok || n == "" || strings.Trim(n, "0123456789") != "" {
+		return ""
+	}
+	return n
+}
+
+// PickerConfigured reports whether users can choose an existing Drive folder.
+func (g *Google) PickerConfigured() bool { return g.Configured() && g.APIKey != "" && g.AppID() != "" }
 
 func isLoopbackURL(s string) bool {
 	u, err := url.Parse(s)

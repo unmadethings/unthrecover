@@ -11,6 +11,7 @@ import (
 
 	"github.com/unmadethings/unthrecover/internal/connections"
 	"github.com/unmadethings/unthrecover/internal/fakegoogle"
+	"github.com/unmadethings/unthrecover/internal/offsite"
 )
 
 func fakeClient(fg *fakegoogle.Server) *connections.Google {
@@ -148,5 +149,92 @@ func TestConnectGoogleDriveGuards(t *testing.T) {
 	r = do(t, ts, "POST", "/api/connections/gdrive", "{}", sid, true)
 	if r.StatusCode != 409 {
 		t.Fatalf("unconfigured: %d", r.StatusCode)
+	}
+}
+
+func TestPickDriveFolder(t *testing.T) {
+	fg := fakegoogle.New()
+	defer fg.Close()
+	fg.ClientID = "123456789012-fake.apps.googleusercontent.com" // the project number starts real client ids
+	srv, ts, _ := newTestServer(t, false)
+	srv.Google = fakeClient(fg)
+	sid := login(t, ts)
+	r := do(t, ts, "POST", "/api/connections/gdrive", "{}", sid, true)
+	var v map[string]string
+	_ = json.NewDecoder(r.Body).Decode(&v)
+	loc, err := fg.Connect(v["auth_url"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := noFollow.Get(loc); r.StatusCode != http.StatusFound {
+		t.Fatal("connect")
+	}
+	// Without an API key there is no picker and the CSP stays strict.
+	if r := do(t, ts, "POST", "/api/connections/gdrive/picker", "{}", sid, true); r.StatusCode != http.StatusConflict {
+		t.Fatalf("picker without key: %d", r.StatusCode)
+	}
+	if r := do(t, ts, "GET", "/api/connections", "", sid, false); strings.Contains(r.Header.Get("Content-Security-Policy"), "google") {
+		t.Fatal("CSP opened without a picker")
+	}
+	srv.Google.APIKey = "browser-key"
+	r = do(t, ts, "POST", "/api/connections/gdrive/picker", "{}", sid, true)
+	var p map[string]string
+	_ = json.NewDecoder(r.Body).Decode(&p)
+	if r.StatusCode != 200 || p["access_token"] == "" || p["api_key"] != "browser-key" || p["app_id"] != "123456789012" {
+		t.Fatalf("picker %d %v", r.StatusCode, p)
+	}
+	if !strings.Contains(r.Header.Get("Content-Security-Policy"), "script-src 'self' https://apis.google.com") ||
+		!strings.Contains(r.Header.Get("Content-Security-Policy"), "frame-ancestors 'none'") {
+		t.Fatalf("CSP %s", r.Header.Get("Content-Security-Policy"))
+	}
+	if c, _ := connections.NewStore(srv.Repo.Root).Load("gdrive"); strings.Contains(p["access_token"], c.RefreshToken) {
+		t.Fatal("refresh token handed to the browser")
+	}
+	// A folder the user did not pick stays invisible: it cannot be set.
+	folder := fg.AddUserFolder("Company backups")
+	if r := do(t, ts, "PUT", "/api/connections/gdrive/folder", `{"id":"`+folder+`"}`, sid, true); r.StatusCode != 400 {
+		t.Fatalf("unpicked folder accepted: %d", r.StatusCode)
+	}
+	if r := do(t, ts, "PUT", "/api/connections/gdrive/folder", `{"id":"../x"}`, sid, true); r.StatusCode != 400 {
+		t.Fatal("invalid id accepted")
+	}
+	fg.Grant(folder) // the user picked it in Google's window
+	if r := do(t, ts, "PUT", "/api/connections/gdrive/folder", `{"id":"`+folder+`"}`, sid, true); r.StatusCode != 200 {
+		t.Fatalf("pick: %d", r.StatusCode)
+	}
+	body, _ := io.ReadAll(do(t, ts, "GET", "/api/connections", "", sid, false).Body)
+	if !strings.Contains(string(body), `"folder":"Company backups","folder_picked":true`) || !strings.Contains(string(body), `"picker_configured":true`) {
+		t.Fatalf("list %s", body)
+	}
+	// Copies now go into the picked folder.
+	d, err := offsite.NewGDrive(srv.Google, connections.NewStore(srv.Repo.Root), "gdrive")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := t.Context()
+	if err := d.Put(ctx, "shop/2026-11/2026-11-11 17.30/copy.json", strings.NewReader("{}"), 2); err != nil {
+		t.Fatal(err)
+	}
+	if f := fg.FindByName("shop"); len(f) != 1 || fg.ParentName(f[0]) != "Company backups" {
+		t.Fatalf("copy not in the picked folder: %v", f)
+	}
+	// The folder goes to the trash: no silent fallback to another folder.
+	for _, f := range fg.FindByName("Company backups") {
+		fg.Mutate(f, func(f *fakegoogle.File) { f.Trashed = true })
+	}
+	d, _ = offsite.NewGDrive(srv.Google, connections.NewStore(srv.Repo.Root), "gdrive")
+	if err := d.Check(ctx); err == nil || !strings.Contains(err.Error(), "choose a folder again") {
+		t.Fatalf("trashed folder: %v", err)
+	}
+	// Back to the default folder.
+	if r := do(t, ts, "DELETE", "/api/connections/gdrive/folder", "", sid, true); r.StatusCode != 200 {
+		t.Fatalf("reset %d", r.StatusCode)
+	}
+	body, _ = io.ReadAll(do(t, ts, "GET", "/api/connections", "", sid, false).Body)
+	if !strings.Contains(string(body), `"folder":"Unth Recover Backups","folder_picked":false`) {
+		t.Fatalf("after reset %s", body)
+	}
+	if r := do(t, ts, "PUT", "/api/connections/nope/folder", `{"id":"x"}`, sid, true); r.StatusCode != 404 {
+		t.Fatal("unknown connection")
 	}
 }

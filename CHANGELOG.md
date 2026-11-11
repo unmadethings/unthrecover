@@ -13,6 +13,13 @@ versioning: [SemVer](https://semver.org/).
   versions (`<prefix>/<job>/<backup-id>/`) stay readable, checkable and fetchable.
 - Google Drive: folders emptied by offsite retention are removed.
 
+### Added
+- Google Drive: **Choose folder…** in Settings → Connections opens Google's folder picker
+  (also shared drives); only the picked folder is shared with unth (`drive.file`). A picked
+  folder that disappears fails loudly instead of falling back. Needs `UNTH_GOOGLE_API_KEY`
+  (built into release binaries). On shared drives retention moves copies to the trash when
+  deleting is not allowed.
+
 ## [0.4.0-beta] — 2026-11-11 — Google Drive, Unth Recover Cloud agent, security fix
 
 ### Added

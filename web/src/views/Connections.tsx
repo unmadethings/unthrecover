@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, fmtTime, type Connection } from "../api";
 import { ErrorBox } from "../components";
+import { pickDriveFolder } from "../picker";
 
 const RESULT: Record<string, string> = {
   denied: "Google Drive was not connected: access was not allowed on Google's page.",
@@ -17,6 +18,7 @@ function readResult(): string | undefined {
 export function Connections({ onError }: { onError: (e: unknown) => void }) {
   const [list, setList] = useState<Connection[]>([]);
   const [configured, setConfigured] = useState(true);
+  const [picker, setPicker] = useState(false);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -27,6 +29,7 @@ export function Connections({ onError }: { onError: (e: unknown) => void }) {
       .then((d) => {
         setList(d.connections);
         setConfigured(d.google_configured);
+        setPicker(d.picker_configured);
       })
       .catch((e) => {
         onError(e);
@@ -59,6 +62,34 @@ export function Connections({ onError }: { onError: (e: unknown) => void }) {
     }
   };
 
+  const chooseFolder = async (name: string) => {
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      const cfg = await api.pickerToken(name);
+      const picked = await pickDriveFolder(cfg);
+      if (!picked) return;
+      const r = await api.setFolder(name, picked.id);
+      setNotice(`Copies for "${name}" now go to the Drive folder "${r.folder}".`);
+      load();
+    } catch (e) {
+      onError(e);
+      setError(String((e as Error).message ?? e));
+    }
+  };
+
+  const defaultFolder = async (name: string) => {
+    if (!confirm(`Store new copies for "${name}" in "Unth Recover Backups" again? Copies already in the chosen folder stay there.`)) return;
+    try {
+      await api.resetFolder(name);
+      setNotice(`Copies for "${name}" go to "Unth Recover Backups" again.`);
+      load();
+    } catch (e) {
+      onError(e);
+      setError(String((e as Error).message ?? e));
+    }
+  };
+
   const disconnect = async (name: string) => {
     if (!confirm(`Disconnect "${name}"? Jobs using it will fail until it is connected again. Copies already on Drive are kept.`)) return;
     try {
@@ -77,8 +108,9 @@ export function Connections({ onError }: { onError: (e: unknown) => void }) {
       <div className="card">
         <p>
           Keep encrypted copies of your verified backups in <b>your own Google Drive</b>. You sign in on Google's page
-          and allow access; Unth Recover can only see the files it creates (folder <i>Unth Recover Backups</i>), never
-          the rest of your Drive. The access token stays on this server.
+          and allow access; Unth Recover can only see the files it creates (folder <i>Unth Recover Backups</i>, or a
+          folder you choose), never the rest of your Drive. The access token stays on this server. Copies are kept in
+          dated folders: <i>job / 2026-11 / 2026-11-11 17.30</i>.
         </p>
         {configured ? (
           <button className="primary" onClick={connect} disabled={busy}>
@@ -100,6 +132,7 @@ export function Connections({ onError }: { onError: (e: unknown) => void }) {
               <th>Name (for job files)</th>
               <th>Service</th>
               <th>Account</th>
+              <th>Folder</th>
               <th>Connected</th>
               <th />
             </tr>
@@ -110,6 +143,16 @@ export function Connections({ onError }: { onError: (e: unknown) => void }) {
                 <td className="mono">{c.name}</td>
                 <td>{c.provider === "gdrive" ? "Google Drive" : c.provider}</td>
                 <td>{c.account}</td>
+                <td>
+                  {c.folder}
+                  {picker && (
+                    <>
+                      {" "}
+                      <button onClick={() => chooseFolder(c.name)}>Choose folder…</button>
+                      {c.folder_picked && <button onClick={() => defaultFolder(c.name)}>Use default</button>}
+                    </>
+                  )}
+                </td>
                 <td>{fmtTime(c.created_at)}</td>
                 <td className="num">
                   <button onClick={() => disconnect(c.name)}>Disconnect</button>

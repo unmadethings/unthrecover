@@ -26,7 +26,12 @@ type File struct {
 	ID, Name, MimeType, Parent string
 	Data                       []byte
 	ByApp                      bool // created through the API (drive.file visibility)
+	Granted                    bool // picked by the user in Google's picker (visible to the app)
+	Trashed                    bool
+	NoDelete                   bool // shared drive member: delete is refused, trash works
 }
+
+func (f *File) visible() bool { return f.ByApp || f.Granted }
 
 type code struct {
 	redirect, challenge string
@@ -233,7 +238,7 @@ func (s *Server) filesCollection(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		var out []map[string]string
 		for _, f := range s.files {
-			if f.Parent == parent && f.ByApp && (name == "" || f.Name == name) {
+			if f.Parent == parent && f.visible() && !f.Trashed && (name == "" || f.Name == name) {
 				out = append(out, map[string]string{"id": f.ID, "name": f.Name, "mimeType": f.MimeType})
 			}
 		}
@@ -268,15 +273,23 @@ func (s *Server) fileItem(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/drive/v3/files/")
 	s.mu.Lock()
 	f, ok := s.files[id]
-	if !ok || !f.ByApp {
+	if !ok || !f.visible() {
 		s.mu.Unlock()
 		jsonErr(w, http.StatusNotFound, "File not found: "+id)
 		return
 	}
 	switch r.Method {
+	case http.MethodPatch:
+		var body struct {
+			Trashed bool `json:"trashed"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.Trashed = body.Trashed
+		s.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]string{"id": f.ID})
 	case http.MethodGet:
 		data := append([]byte(nil), f.Data...)
-		meta := map[string]string{"id": f.ID, "name": f.Name, "mimeType": f.MimeType}
+		meta := map[string]any{"id": f.ID, "name": f.Name, "mimeType": f.MimeType, "trashed": f.Trashed}
 		s.mu.Unlock()
 		if r.URL.Query().Get("alt") == "media" {
 			_, _ = w.Write(data)
@@ -284,6 +297,11 @@ func (s *Server) fileItem(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.NewEncoder(w).Encode(meta)
 	case http.MethodDelete:
+		if f.NoDelete {
+			s.mu.Unlock()
+			jsonErr(w, http.StatusForbidden, "The user does not have sufficient permissions for this file.")
+			return
+		}
 		var del func(id string)
 		del = func(id string) {
 			for _, c := range s.files {
@@ -370,6 +388,25 @@ func (s *Server) AddUserFile(name string, data []byte) {
 	defer s.mu.Unlock()
 	id := s.id()
 	s.files[id] = &File{ID: id, Name: name, Parent: "root", Data: data, MimeType: "text/plain"}
+}
+
+// AddUserFolder adds a folder the user created outside unth; the app cannot
+// see it until Grant (the user picks it in Google's picker).
+func (s *Server) AddUserFolder(name string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	id := s.id()
+	s.files[id] = &File{ID: id, Name: name, Parent: "root", MimeType: "application/vnd.google-apps.folder"}
+	return id
+}
+
+// Grant shares one file or folder with the app, as Google's picker does.
+func (s *Server) Grant(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if f, ok := s.files[id]; ok {
+		f.Granted = true
+	}
 }
 
 // FindByName returns the files with a name (for tampering in tests).

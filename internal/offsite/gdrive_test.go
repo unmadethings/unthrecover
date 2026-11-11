@@ -220,3 +220,30 @@ func TestGDriveConnectionChecks(t *testing.T) {
 		t.Fatalf("missing scope: %v", err)
 	}
 }
+
+func TestGDriveSharedDriveDeleteFallsBackToTrash(t *testing.T) {
+	fg := fakegoogle.New()
+	defer fg.Close()
+	g := fakeGoogleClient(fg)
+	store := connections.NewStore(t.TempDir())
+	connectFake(t, fg, g, store)
+	d, err := NewGDrive(g, store, "gdrive")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := d.Put(ctx, "shop/2026-11/2026-11-11 17.30/copy.json", strings.NewReader("{}"), 2); err != nil {
+		t.Fatal(err)
+	}
+	f := fg.FindByName("copy.json")[0]
+	fg.Mutate(f, func(f *fakegoogle.File) { f.NoDelete = true }) // shared drive member
+	if err := d.Delete(ctx, "shop/2026-11/2026-11-11 17.30/copy.json"); err != nil {
+		t.Fatal(err)
+	}
+	if !f.Trashed {
+		t.Fatal("not moved to the trash")
+	}
+	if keys, _ := d.List(ctx, "shop/"); len(keys) != 0 {
+		t.Fatalf("trashed file still listed: %v", keys)
+	}
+}

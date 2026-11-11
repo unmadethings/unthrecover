@@ -140,6 +140,9 @@ func (s *Server) Handler(bg context.Context) http.Handler {
 	mux.HandleFunc("GET /api/connections", s.auth(s.listConnections))
 	mux.HandleFunc("POST /api/connections/gdrive", s.auth(s.startGDrive))
 	mux.HandleFunc("DELETE /api/connections/{name}", s.auth(s.deleteConnection))
+	mux.HandleFunc("POST /api/connections/{name}/picker", s.auth(s.pickerToken))
+	mux.HandleFunc("PUT /api/connections/{name}/folder", s.auth(s.setFolder))
+	mux.HandleFunc("DELETE /api/connections/{name}/folder", s.auth(s.resetFolder))
 	mux.HandleFunc("GET "+oauthCallbackPath, s.googleCallback)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not found")
@@ -151,7 +154,15 @@ func (s *Server) Handler(bg context.Context) http.Handler {
 func (s *Server) headers(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		csp := "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		if s.google().PickerConfigured() {
+			// Google's folder picker: its loader script, its window (an iframe
+			// from docs.google.com) and the inline styles it positions itself with.
+			csp = "default-src 'self'; img-src 'self' data: https://ssl.gstatic.com https://www.gstatic.com https://*.googleusercontent.com; " +
+				"style-src 'self' 'unsafe-inline'; script-src 'self' https://apis.google.com; frame-src https://docs.google.com https://drive.google.com; " +
+				"connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		}
+		h.Set("Content-Security-Policy", csp)
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")

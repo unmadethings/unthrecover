@@ -6,7 +6,8 @@ COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 PKG     := github.com/unmadethings/unthrecover/internal/buildinfo
 LDFLAGS := -s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).Date=$(DATE) \
-	-X $(PKG).GoogleClientID=$(UNTH_GOOGLE_CLIENT_ID) -X $(PKG).GoogleClientSecret=$(UNTH_GOOGLE_CLIENT_SECRET)
+	-X $(PKG).GoogleClientID=$(UNTH_GOOGLE_CLIENT_ID) -X $(PKG).GoogleClientSecret=$(UNTH_GOOGLE_CLIENT_SECRET) \
+	-X $(PKG).GoogleAPIKey=$(UNTH_GOOGLE_API_KEY)
 
 .PHONY: all build test test-race test-integration test-install lint vuln sec check dist deb image web clean
 

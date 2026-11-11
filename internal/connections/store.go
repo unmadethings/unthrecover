@@ -21,21 +21,32 @@ type Connection struct {
 	Account      string    `json:"account"`  // e-mail shown in the panel
 	ClientID     string    `json:"client_id"`
 	RefreshToken string    `json:"refresh_token"`
-	FolderID     string    `json:"folder_id,omitempty"` // "Unth Recover Backups" folder created by unth
+	FolderID     string    `json:"folder_id,omitempty"` // where copies go: "Unth Recover Backups" or a picked folder
+	FolderName   string    `json:"folder_name,omitempty"`
+	FolderPicked bool      `json:"folder_picked,omitempty"` // chosen by the user with Google's picker
 	CreatedAt    time.Time `json:"created_at"`
 }
 
 // Public is the connection without secrets.
 type Public struct {
-	Name      string    `json:"name"`
-	Provider  string    `json:"provider"`
-	Account   string    `json:"account"`
-	CreatedAt time.Time `json:"created_at"`
+	Name         string    `json:"name"`
+	Provider     string    `json:"provider"`
+	Account      string    `json:"account"`
+	Folder       string    `json:"folder"`        // folder name on Drive
+	FolderPicked bool      `json:"folder_picked"` // false: the default "Unth Recover Backups"
+	CreatedAt    time.Time `json:"created_at"`
 }
+
+// DefaultFolderName is the folder unth creates when none was picked.
+const DefaultFolderName = "Unth Recover Backups"
 
 // Public strips secrets.
 func (c *Connection) Public() Public {
-	return Public{Name: c.Name, Provider: c.Provider, Account: c.Account, CreatedAt: c.CreatedAt}
+	folder := c.FolderName
+	if !c.FolderPicked || folder == "" {
+		folder = DefaultFolderName
+	}
+	return Public{Name: c.Name, Provider: c.Provider, Account: c.Account, Folder: folder, FolderPicked: c.FolderPicked, CreatedAt: c.CreatedAt}
 }
 
 // NamePattern restricts connection names (used in job files and file names).

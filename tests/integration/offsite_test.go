@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -123,7 +124,8 @@ offsite:
 `, keyDir, keyDir, s3.endpoint, s3.bucket)
 	cfg := e.config(cfgOpts{queries: true, extra: offsiteYAML})
 
-	var ids []string
+	var ids, locs []string
+	dated := regexp.MustCompile(`^it/server1/it-shop/\d{4}-\d{2}/\d{4}-\d{2}-\d{2} \d{2}\.\d{2}(-\d+)?$`)
 	for i := 0; i < 3; i++ {
 		r := e.run("run", "--config", cfg, "--format", "json")
 		var sum struct {
@@ -142,7 +144,10 @@ offsite:
 		if i == 2 && len(sum.Offsite.Pruned) != 1 {
 			t.Fatalf("offsite retention keep_last 2 should prune 1 copy, got %v", sum.Offsite.Pruned)
 		}
-		ids = append(ids, sum.BackupID)
+		if !dated.MatchString(sum.Offsite.Location) {
+			t.Fatalf("copy folder %q is not <job>/YYYY-MM/YYYY-MM-DD HH.MM", sum.Offsite.Location)
+		}
+		ids, locs = append(ids, sum.BackupID), append(locs, sum.Offsite.Location)
 	}
 	objs := s3.objects(t, "it/server1/it-shop/")
 	if len(objs) != 2*4 {
@@ -155,7 +160,7 @@ offsite:
 			}
 		}
 	}
-	if _, ok := objs["it/server1/it-shop/"+ids[0]+"/copy.json"]; ok {
+	if _, ok := objs[locs[0]+"/copy.json"]; ok {
 		t.Fatal("oldest copy should have been pruned")
 	}
 	r := e.run("offsite", "list", "--config", cfg, "--format", "json")
@@ -188,7 +193,7 @@ offsite:
 	}
 
 	// Tamper with the newest artifact object in the bucket.
-	key := "it/server1/it-shop/" + ids[2] + "/artifact.dump.age"
+	key := locs[2] + "/artifact.dump.age"
 	data := objs[key]
 	data[len(data)/2] ^= 0xff
 	if _, err := s3.client.PutObject(context.Background(), s3.bucket, key, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{}); err != nil {

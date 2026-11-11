@@ -14,6 +14,10 @@ var (
 	// secret as confidential. Overridable with UNTH_GOOGLE_CLIENT_ID/_SECRET.
 	GoogleClientID     = ""
 	GoogleClientSecret = ""
+	// GoogleAPIKey is the project's browser API key for Google's folder picker
+	// (public by design, restricted to the Picker API). Overridable with
+	// UNTH_GOOGLE_API_KEY.
+	GoogleAPIKey = ""
 )
 
 // GoVersion returns the Go toolchain version used to build the binary.

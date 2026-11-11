@@ -61,6 +61,8 @@ jobs:
           # their own Google Drive from the panel. Not confidential for installed apps.
           UNTH_GOOGLE_CLIENT_ID: ${{ secrets.UNTH_GOOGLE_CLIENT_ID }}
           UNTH_GOOGLE_CLIENT_SECRET: ${{ secrets.UNTH_GOOGLE_CLIENT_SECRET }}
+          # Browser API key for Google's folder picker (public, Picker API only).
+          UNTH_GOOGLE_API_KEY: ${{ secrets.UNTH_GOOGLE_API_KEY }}
         run: make dist VERSION="$VERSION"
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3

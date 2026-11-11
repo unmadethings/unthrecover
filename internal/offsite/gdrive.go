@@ -18,8 +18,9 @@ import (
 	"github.com/unmadethings/unthrecover/internal/connections"
 )
 
-// RootFolderName is the Drive folder unth creates for its copies.
-const RootFolderName = "Unth Recover Backups"
+// RootFolderName is the Drive folder unth creates for its copies when the
+// user did not pick one.
+const RootFolderName = connections.DefaultFolderName
 
 const (
 	folderMime = "application/vnd.google-apps.folder"
@@ -149,7 +150,8 @@ func (d *GDrive) children(ctx context.Context, parent, name string) ([]driveFile
 	var all []driveFile
 	pageToken := ""
 	for {
-		v := url.Values{"q": {q}, "fields": {"nextPageToken,files(id,name,mimeType)"}, "pageSize": {"1000"}, "spaces": {"drive"}}
+		v := url.Values{"q": {q}, "fields": {"nextPageToken,files(id,name,mimeType)"}, "pageSize": {"1000"}, "spaces": {"drive"},
+			"supportsAllDrives": {"true"}, "includeItemsFromAllDrives": {"true"}} // a picked folder may be on a shared drive
 		if pageToken != "" {
 			v.Set("pageToken", pageToken)
 		}
@@ -170,7 +172,7 @@ func (d *GDrive) children(ctx context.Context, parent, name string) ([]driveFile
 
 func (d *GDrive) createFolder(ctx context.Context, parent, name string) (string, error) {
 	meta, _ := json.Marshal(map[string]any{"name": name, "mimeType": folderMime, "parents": []string{parent}})
-	resp, err := d.do(ctx, http.MethodPost, d.g.DriveURL+"/files?fields=id", func() io.Reader { return bytes.NewReader(meta) },
+	resp, err := d.do(ctx, http.MethodPost, d.g.DriveURL+"/files?fields=id&supportsAllDrives=true", func() io.Reader { return bytes.NewReader(meta) },
 		map[string]string{"Content-Type": "application/json"})
 	if err != nil {
 		return "", err
@@ -186,14 +188,20 @@ func (d *GDrive) createFolder(ctx context.Context, parent, name string) (string,
 	return f.ID, nil
 }
 
-// Check makes sure the "Unth Recover Backups" folder exists (creating it on
-// first use) and that the connection works.
+// Check makes sure the copy folder is usable: the folder the user picked, or
+// "Unth Recover Backups" (created on first use, reused on a new machine).
 func (d *GDrive) Check(ctx context.Context) error {
 	if d.conn.FolderID != "" {
-		var f driveFile
-		err := d.getJSON(ctx, d.g.DriveURL+"/files/"+url.PathEscape(d.conn.FolderID)+"?fields=id,name,mimeType", "folder", &f)
-		if err == nil && f.MimeType == folderMime {
+		f, err := d.folderInfo(ctx, d.conn.FolderID)
+		if err == nil && f.MimeType == folderMime && !f.Trashed {
 			return nil
+		}
+		if d.conn.FolderPicked {
+			// Never fall back silently: copies would land somewhere the user did not choose.
+			if err != nil && !strings.Contains(err.Error(), "HTTP 404") {
+				return err
+			}
+			return fmt.Errorf("the Drive folder %q chosen for copies is gone, in the trash or no longer shared with Unth Recover; choose a folder again in the panel (Settings → Connections)", d.conn.FolderName)
 		}
 		if err != nil && !strings.Contains(err.Error(), "HTTP 404") {
 			return err
@@ -217,11 +225,61 @@ func (d *GDrive) Check(ctx context.Context) error {
 			return err
 		}
 	}
-	d.conn.FolderID = id
+	d.conn.FolderID, d.conn.FolderName = id, RootFolderName
 	d.mu.Lock()
 	d.folders = map[string]string{}
 	d.mu.Unlock()
 	return d.store.Save(d.conn)
+}
+
+type folderMeta struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	MimeType string `json:"mimeType"`
+	Trashed  bool   `json:"trashed"`
+}
+
+func (d *GDrive) folderInfo(ctx context.Context, id string) (*folderMeta, error) {
+	var f folderMeta
+	err := d.getJSON(ctx, d.g.DriveURL+"/files/"+url.PathEscape(id)+"?fields=id,name,mimeType,trashed&supportsAllDrives=true", "folder", &f)
+	return &f, err
+}
+
+// AccessToken returns a short-lived access token (scope drive.file) for
+// Google's folder picker in the panel.
+func (d *GDrive) AccessToken(ctx context.Context) (string, error) { return d.token(ctx, false) }
+
+// UseFolder makes a folder the user picked with Google's picker the place
+// for copies. Picking shares exactly that folder with the app (drive.file);
+// it must be a folder that is not in the trash.
+func (d *GDrive) UseFolder(ctx context.Context, id string) (string, error) {
+	if id == "" || len(id) > 200 || strings.ContainsAny(id, "/?#&% ") {
+		return "", errors.New("invalid folder id")
+	}
+	f, err := d.folderInfo(ctx, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "HTTP 404") {
+			return "", errors.New("cannot open that folder; pick it again in Google's window")
+		}
+		return "", err
+	}
+	if f.MimeType != folderMime || f.Trashed {
+		return "", errors.New("pick a folder that is not in the trash")
+	}
+	d.conn.FolderID, d.conn.FolderName, d.conn.FolderPicked = f.ID, f.Name, true
+	d.mu.Lock()
+	d.folders = map[string]string{}
+	d.mu.Unlock()
+	return f.Name, d.store.Save(d.conn)
+}
+
+// UseDefaultFolder goes back to the "Unth Recover Backups" folder.
+func (d *GDrive) UseDefaultFolder(ctx context.Context) error {
+	d.conn.FolderID, d.conn.FolderName, d.conn.FolderPicked = "", "", false
+	d.mu.Lock()
+	d.folders = map[string]string{}
+	d.mu.Unlock()
+	return d.Check(ctx)
 }
 
 // dir resolves a slash path below the root folder; create makes missing folders.
@@ -298,7 +356,7 @@ func (d *GDrive) Put(ctx context.Context, key string, r io.Reader, _ int64) erro
 	}
 	old, _ := d.children(ctx, parent, path.Base(key))
 	meta, _ := json.Marshal(map[string]any{"name": path.Base(key), "parents": []string{parent}})
-	resp, err := d.do(ctx, http.MethodPost, d.g.UploadURL+"/files?uploadType=resumable&fields=id",
+	resp, err := d.do(ctx, http.MethodPost, d.g.UploadURL+"/files?uploadType=resumable&fields=id&supportsAllDrives=true",
 		func() io.Reader { return bytes.NewReader(meta) },
 		map[string]string{"Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Type": "application/octet-stream"})
 	if err != nil {
@@ -370,7 +428,7 @@ func (d *GDrive) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := d.do(ctx, http.MethodGet, d.g.DriveURL+"/files/"+url.PathEscape(id)+"?alt=media", nil, nil)
+	resp, err := d.do(ctx, http.MethodGet, d.g.DriveURL+"/files/"+url.PathEscape(id)+"?alt=media&supportsAllDrives=true", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -458,11 +516,24 @@ func (d *GDrive) RemoveEmptyDir(ctx context.Context, dir string) (bool, error) {
 }
 
 func (d *GDrive) deleteID(ctx context.Context, id string) error {
-	resp, err := d.do(ctx, http.MethodDelete, d.g.DriveURL+"/files/"+url.PathEscape(id), nil, nil)
+	resp, err := d.do(ctx, http.MethodDelete, d.g.DriveURL+"/files/"+url.PathEscape(id)+"?supportsAllDrives=true", nil, nil)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		// On a shared drive only managers may delete for good; members move to the trash.
+		tr, err := d.do(ctx, http.MethodPatch, d.g.DriveURL+"/files/"+url.PathEscape(id)+"?supportsAllDrives=true&fields=id",
+			func() io.Reader { return strings.NewReader(`{"trashed":true}`) }, map[string]string{"Content-Type": "application/json"})
+		if err != nil {
+			return err
+		}
+		defer tr.Body.Close()
+		if tr.StatusCode != http.StatusOK && tr.StatusCode != http.StatusNotFound {
+			return apiError(tr, "move to trash")
+		}
+		return nil
+	}
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
 		return apiError(resp, "delete")
 	}
