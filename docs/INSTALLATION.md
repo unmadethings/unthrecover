@@ -90,7 +90,7 @@ the `.deb` (units in `/usr/lib/systemd/system`). It recommends `postgresql` and 
 a PostgreSQL client whose major version is ≥ your servers (e.g. `postgresql16` from PGDG).
 
 ```bash
-sha256sum -c SHA256SUMS --ignore-missing && sudo dnf install ./unthrecover_0.3.0-beta_amd64.rpm
+sha256sum -c SHA256SUMS --ignore-missing && sudo dnf install ./unthrecover_0.4.0-beta_amd64.rpm
 ```
 
 Tested by installing into clean Rocky Linux 9 and Fedora 41 containers (`scripts/test-rpm.sh`).

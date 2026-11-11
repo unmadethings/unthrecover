@@ -5,6 +5,8 @@ versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0-beta] — 2026-11-11 — Google Drive, Unth Recover Cloud agent, security fix
+
 ### Added
 - **Connect Google Drive in the panel** (Settings → Connections): Google's own sign-in and consent
   page in the browser; each user connects their own Drive; scope `drive.file` (unth sees only its
