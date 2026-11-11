@@ -43,6 +43,8 @@ type Server struct {
 	Events   []agentproto.Event
 	Rejected int // requests with bad signatures
 	seq      int
+	// Drive answers drive-token requests (connection -> token); nil: 404.
+	Drive map[string]agentproto.DriveTokenResponse
 }
 
 // New starts the server.
@@ -54,6 +56,7 @@ func New() *Server {
 	mux.HandleFunc("POST "+agentproto.PathHeartbeat, s.signed(s.heartbeat))
 	mux.HandleFunc("GET "+agentproto.PathJobs, s.signed(s.getJobs))
 	mux.HandleFunc("POST "+agentproto.PathEvents, s.signed(s.events))
+	mux.HandleFunc("POST "+agentproto.PathDriveToken, s.signed(s.driveToken))
 	s.Server = httptest.NewServer(mux)
 	return s
 }
@@ -148,6 +151,19 @@ func (s *Server) getJobs(w http.ResponseWriter, a *Agent, _ []byte) {
 		jr.Jobs = []agentproto.Job{}
 	}
 	_ = json.NewEncoder(w).Encode(jr)
+}
+
+func (s *Server) driveToken(w http.ResponseWriter, _ *Agent, body []byte) {
+	var req agentproto.DriveTokenRequest
+	_ = json.Unmarshal(body, &req)
+	s.mu.Lock()
+	t, ok := s.Drive[req.Connection]
+	s.mu.Unlock()
+	if !ok {
+		http.Error(w, "unknown connection", http.StatusNotFound)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(t) // #nosec G117 -- test fake: handing out the token is its job
 }
 
 func (s *Server) events(w http.ResponseWriter, _ *Agent, body []byte) {

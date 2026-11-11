@@ -35,10 +35,56 @@ type GDrive struct {
 	store *connections.Store
 	conn  *connections.Connection
 
+	broker DriveBroker // set: tokens come from a control plane (managed jobs)
+
 	mu      sync.Mutex
 	access  string
 	expiry  time.Time
 	folders map[string]string // "a/b" -> folder id
+}
+
+// BrokeredToken is an access token handed out by a control plane that keeps
+// the Drive connection (Unth Recover Cloud), with the folder for copies.
+type BrokeredToken struct {
+	AccessToken string
+	Expiry      time.Time
+	Account     string
+	FolderID    string
+	FolderName  string
+}
+
+// DriveBroker returns a fresh access token for a connection of the control plane.
+type DriveBroker func(ctx context.Context, connection string) (*BrokeredToken, error)
+
+type brokerKey struct{}
+
+// WithDriveBroker makes Open use the control plane's Drive connections for
+// offsite type gdrive (the agent sets it for managed jobs).
+func WithDriveBroker(ctx context.Context, b DriveBroker) context.Context {
+	return context.WithValue(ctx, brokerKey{}, b)
+}
+
+// DriveBrokerFrom returns the broker set with WithDriveBroker, if any.
+func DriveBrokerFrom(ctx context.Context) DriveBroker { return driveBroker(ctx) }
+
+func driveBroker(ctx context.Context) DriveBroker {
+	b, _ := ctx.Value(brokerKey{}).(DriveBroker)
+	return b
+}
+
+// NewBrokeredGDrive opens a Drive connection kept by a control plane. The
+// folder is fixed by the control plane: unth never creates or changes it.
+func NewBrokeredGDrive(ctx context.Context, g *connections.Google, name string, b DriveBroker) (*GDrive, error) {
+	t, err := b(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if t.AccessToken == "" || t.FolderID == "" {
+		return nil, errors.New("the control plane returned no Drive access or folder")
+	}
+	c := &connections.Connection{Name: name, Provider: "gdrive", Account: t.Account, FolderID: t.FolderID,
+		FolderName: t.FolderName, FolderPicked: true}
+	return &GDrive{g: g, conn: c, broker: b, access: t.AccessToken, expiry: t.Expiry, folders: map[string]string{}}, nil
 }
 
 // NewGDrive loads a connection created in the panel.
@@ -67,6 +113,14 @@ func (d *GDrive) token(ctx context.Context, force bool) (string, error) {
 	defer d.mu.Unlock()
 	if !force && d.access != "" && time.Until(d.expiry) > time.Minute {
 		return d.access, nil
+	}
+	if d.broker != nil {
+		t, err := d.broker(ctx, d.conn.Name)
+		if err != nil {
+			return "", fmt.Errorf("google drive access for %s from the control plane: %w", d.conn.Account, err)
+		}
+		d.access, d.expiry = t.AccessToken, t.Expiry
+		return t.AccessToken, nil
 	}
 	tok, exp, err := d.g.Refresh(ctx, d.conn.RefreshToken)
 	if err != nil {

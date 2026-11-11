@@ -13,6 +13,7 @@ import (
 
 	"github.com/unmadethings/unthrecover/internal/config"
 	"github.com/unmadethings/unthrecover/internal/fakecloud"
+	"github.com/unmadethings/unthrecover/internal/offsite"
 	"github.com/unmadethings/unthrecover/pkg/agentproto"
 )
 
@@ -75,11 +76,24 @@ func TestEnrollment(t *testing.T) {
 func TestManagedJobRun(t *testing.T) {
 	fc := fakecloud.New()
 	defer fc.Close()
+	fc.Drive = map[string]agentproto.DriveTokenResponse{"gdrive": {AccessToken: "ya29.short-lived", ExpiresAt: time.Now().Add(time.Hour),
+		Account: "ops@example.com", FolderID: "folder-1", FolderName: "Backups"}}
 	var secrets []string
 	var cfgs []*config.Config
+	var brokered []*offsite.BrokeredToken
 	hooks := Hooks{
-		RunJob: func(_ context.Context, cfg *config.Config) map[string]any {
+		RunJob: func(ctx context.Context, cfg *config.Config) map[string]any {
 			secrets, cfgs = append(secrets, os.Getenv("UNTH_SECRET_DB")), append(cfgs, cfg)
+			if b := offsite.DriveBrokerFrom(ctx); b != nil {
+				tok, err := b(ctx, cfg.Offsite.Connection)
+				if err != nil {
+					t.Errorf("drive token: %v", err)
+				}
+				brokered = append(brokered, tok)
+				if _, err := b(ctx, "other-org-drive"); err == nil {
+					t.Error("unknown connection answered")
+				}
+			}
 			return map[string]any{"outcome": "success", "verification_status": "VERIFIED"}
 		},
 		Verify: func(_ context.Context, id string) map[string]any {
@@ -113,6 +127,10 @@ func TestManagedJobRun(t *testing.T) {
 		t.Fatalf("secrets seen by the runs: %q (want the secret only in job-shop)", secrets)
 	}
 	seenCfg := cfgs[1]
+	// Only the Drive job gets the control plane's Drive broker.
+	if len(brokered) != 1 || brokered[0].AccessToken != "ya29.short-lived" || brokered[0].FolderID != "folder-1" {
+		t.Fatalf("brokered drive tokens: %+v", brokered)
+	}
 	if os.Getenv("UNTH_SECRET_DB") != "" {
 		t.Fatal("secret left in the environment after the run")
 	}

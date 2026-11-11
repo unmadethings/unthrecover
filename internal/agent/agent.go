@@ -198,6 +198,8 @@ type Agent struct {
 	Hooks   Hooks
 	Log     *slog.Logger
 	Redact  func(string) string
+	// Secrets registers values to redact from logs (e.g. Drive access tokens).
+	Secrets func(...string)
 
 	mu       sync.Mutex
 	jobs     agentproto.JobsResponse
@@ -497,12 +499,31 @@ func (a *Agent) runJob(ctx context.Context, w work) {
 	a.mu.Lock()
 	a.running[j.ID] = true
 	a.mu.Unlock()
+	if cfg.Offsite.Type == config.OffsiteGDrive {
+		// Managed Drive copies use the Drive connected in the control plane:
+		// it hands out short-lived access tokens; the refresh token stays there.
+		ctx = offsite.WithDriveBroker(ctx, a.driveToken)
+	}
 	sum := a.Hooks.RunJob(ctx, cfg)
 	unsetAll(set)
 	a.mu.Lock()
 	delete(a.running, j.ID)
 	a.mu.Unlock()
 	a.addEvent(agentproto.Event{Type: agentproto.EvRunCompleted, CommandID: w.cmdID, JobID: j.ID, Summary: sum})
+}
+
+// driveToken asks the control plane for an access token of one of the
+// organization's Drive connections.
+func (a *Agent) driveToken(ctx context.Context, connection string) (*offsite.BrokeredToken, error) {
+	var r agentproto.DriveTokenResponse
+	if err := a.Client.do(ctx, http.MethodPost, agentproto.PathDriveToken, agentproto.DriveTokenRequest{Connection: connection}, &r); err != nil {
+		return nil, err
+	}
+	if a.Secrets != nil {
+		a.Secrets(r.AccessToken)
+	}
+	return &offsite.BrokeredToken{AccessToken: r.AccessToken, Expiry: r.ExpiresAt, Account: r.Account,
+		FolderID: r.FolderID, FolderName: r.FolderName}, nil
 }
 
 func unsetAll(names []string) {

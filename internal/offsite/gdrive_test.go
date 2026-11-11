@@ -3,8 +3,10 @@ package offsite
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,8 +14,8 @@ import (
 	"github.com/unmadethings/unthrecover/internal/config"
 	"github.com/unmadethings/unthrecover/internal/connections"
 	"github.com/unmadethings/unthrecover/internal/failure"
-	"github.com/unmadethings/unthrecover/internal/fakegoogle"
 	"github.com/unmadethings/unthrecover/internal/metadata"
+	"github.com/unmadethings/unthrecover/pkg/fakegoogle"
 )
 
 func fakeGoogleClient(fg *fakegoogle.Server) *connections.Google {
@@ -245,5 +247,64 @@ func TestGDriveSharedDriveDeleteFallsBackToTrash(t *testing.T) {
 	}
 	if keys, _ := d.List(ctx, "shop/"); len(keys) != 0 {
 		t.Fatalf("trashed file still listed: %v", keys)
+	}
+}
+
+// A Drive connected in a control plane: the agent only ever holds
+// short-lived access tokens; the folder is fixed by the control plane.
+func TestBrokeredGDrive(t *testing.T) {
+	fg := fakegoogle.New()
+	defer fg.Close()
+	g := fakeGoogleClient(fg)
+	cloudStore := connections.NewStore(t.TempDir()) // stands in for the control plane
+	rt := connectFake(t, fg, g, cloudStore)
+	folder := fg.AddUserFolder("Acme backups")
+	fg.Grant(folder)
+	calls := 0
+	broker := func(ctx context.Context, name string) (*BrokeredToken, error) {
+		calls++
+		if name != "drive-acme" {
+			return nil, errors.New("unknown connection")
+		}
+		at, exp, err := g.Refresh(ctx, rt)
+		return &BrokeredToken{AccessToken: at, Expiry: exp, Account: "user@example.com", FolderID: folder, FolderName: "Acme backups"}, err
+	}
+	e := newEnv(t, true, true)
+	ctx := WithDriveBroker(context.Background(), broker)
+	cfg := &config.Config{Offsite: config.Offsite{Type: config.OffsiteGDrive, Connection: "drive-acme", Prefix: "web1"},
+		Encryption: config.Encryption{IdentityFile: filepath.Join(e.dir, AgeKeyFile)}, Signing: config.Signing{KeyFile: filepath.Join(e.dir, SignKeyFile)}}
+	t.Setenv("UNTH_GOOGLE_TEST_ENDPOINT", fg.URL)
+	cp, err := Open(ctx, cfg, e.store, e.repo, "agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cp.Backend.(*GDrive).g.HTTP = fg.Client()
+	b := e.addBackup(t, "shop", time.Now().UTC(), secretContent)
+	if rec, err := cp.Copy(ctx, b); err != nil || rec.Target != "gdrive:user@example.com" {
+		t.Fatalf("copy: %v %+v", err, rec)
+	}
+	if f := fg.FindByName("web1"); len(f) != 1 || fg.ParentName(f[0]) != "Acme backups" {
+		t.Fatal("copy not in the control plane's folder")
+	}
+	if n := len(fg.FindByName(RootFolderName)); n != 0 {
+		t.Fatal("a brokered connection must never create its own folder")
+	}
+	// Expired access -> a new token from the broker, transparently.
+	fg.ExpireAccess()
+	if _, err := cp.Check(ctx, b); err != nil {
+		t.Fatalf("check after expiry: %v", err)
+	}
+	if calls < 2 {
+		t.Fatalf("broker calls %d", calls)
+	}
+	// The folder is removed: fail loudly, no fallback.
+	fg.Mutate(fg.FindByName("Acme backups")[0], func(f *fakegoogle.File) { f.Trashed = true })
+	if _, err := Open(ctx, cfg, e.store, e.repo, "agent"); err == nil || !strings.Contains(err.Error(), "choose a folder again") {
+		t.Fatalf("trashed folder: %v", err)
+	}
+	// Unknown connection at the control plane.
+	cfg.Offsite.Connection = "drive-other"
+	if _, err := Open(ctx, cfg, e.store, e.repo, "agent"); failure.CategoryOf(err) != failure.OffsiteFailed {
+		t.Fatalf("unknown connection: %v", err)
 	}
 }

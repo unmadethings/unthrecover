@@ -72,6 +72,9 @@ are decrypted only for the duration of a run.`,
 				return err
 			}
 			a, err := agent.New(r.Root, agentHooks(app), app.Log, app.Redactor.Redact)
+			if a != nil {
+				a.Secrets = app.Redactor.Add
+			}
 			if err != nil {
 				return &ExitError{Code: ExitUsage, Err: err}
 			}

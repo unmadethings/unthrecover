@@ -19,6 +19,11 @@ versioning: [SemVer](https://semver.org/).
   folder that disappears fails loudly instead of falling back. Needs `UNTH_GOOGLE_API_KEY`
   (built into release binaries). On shared drives retention moves copies to the trash when
   deleting is not allowed.
+- Agent: managed jobs can copy to a Google Drive connected in Unth Recover Cloud (offsite
+  type `gdrive`). The control plane keeps the connection and hands the agent short-lived
+  access tokens for its folder (`POST /api/agent/v1/drive-token`); copies are encrypted with
+  the agent's own key as before.
+- `pkg/fakegoogle`: the fake of Google's OAuth and Drive APIs is importable for tests.
 
 ## [0.4.0-beta] — 2026-11-11 — Google Drive, Unth Recover Cloud agent, security fix
 

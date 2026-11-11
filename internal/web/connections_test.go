@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/unmadethings/unthrecover/internal/connections"
-	"github.com/unmadethings/unthrecover/internal/fakegoogle"
 	"github.com/unmadethings/unthrecover/internal/offsite"
+	"github.com/unmadethings/unthrecover/pkg/fakegoogle"
 )
 
 func fakeClient(fg *fakegoogle.Server) *connections.Google {

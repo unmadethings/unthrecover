@@ -37,6 +37,9 @@ const (
 	PathHeartbeat = "/api/agent/v1/heartbeat"
 	PathJobs      = "/api/agent/v1/jobs"
 	PathEvents    = "/api/agent/v1/events"
+	// PathDriveToken: a short-lived Google Drive access token for a Drive
+	// connected in the control plane (offsite type gdrive in managed jobs).
+	PathDriveToken = "/api/agent/v1/drive-token" // #nosec G101 -- a URL path, not a credential
 )
 
 // Signature headers.
@@ -219,4 +222,20 @@ func Verify(r *http.Request, now time.Time, lookup func(agentID string) (ed25519
 		return "", nil, fmt.Errorf("%w: replayed request", ErrBadSignature)
 	}
 	return id, body, nil
+}
+
+// DriveTokenRequest asks for an access token of a Drive connection of the
+// agent's organization.
+type DriveTokenRequest struct {
+	Connection string `json:"connection"`
+}
+
+// DriveTokenResponse is a short-lived access token (scope drive.file) and the
+// folder copies go to. The refresh token never leaves the control plane.
+type DriveTokenResponse struct {
+	AccessToken string    `json:"access_token"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	Account     string    `json:"account"`
+	FolderID    string    `json:"folder_id"`
+	FolderName  string    `json:"folder_name"`
 }

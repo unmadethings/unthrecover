@@ -51,8 +51,18 @@ func Open(ctx context.Context, cfg *config.Config, store *metadata.Store, r *rep
 	}
 	var be Backend
 	if cfg.Offsite.Type == config.OffsiteGDrive {
-		gd, gerr := NewGDrive(connections.DefaultGoogle(), connections.NewStore(r.Root), cfg.Offsite.Connection)
+		var gd *GDrive
+		var gerr error
+		if b := driveBroker(ctx); b != nil {
+			gd, gerr = NewBrokeredGDrive(ctx, connections.DefaultGoogle(), cfg.Offsite.Connection, b)
+		} else {
+			gd, gerr = NewGDrive(connections.DefaultGoogle(), connections.NewStore(r.Root), cfg.Offsite.Connection)
+		}
 		if gerr != nil {
+			if driveBroker(ctx) != nil {
+				return nil, failure.New(failure.OffsiteFailed, "google drive", gerr).
+					WithHint("check the Google Drive connection in Unth Recover Cloud (Settings → Storage) and that this server reaches it")
+			}
 			return nil, failure.New(failure.ConfigInvalid, "offsite", gerr)
 		}
 		if gerr := gd.Check(ctx); gerr != nil {
