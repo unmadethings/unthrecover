@@ -105,7 +105,8 @@ func TestManagedJobRun(t *testing.T) {
 	offsiteJob := jobYAML + "offsite:\n  type: gdrive\n  connection: gdrive\n"
 	jobs := []agentproto.Job{
 		{ID: "job-shop", Name: "shop", Schedule: "daily 03:00", Config: jobYAML},
-		{ID: "job-files", Name: "files", Config: offsiteJob},
+		{ID: "job-files", Name: "files", Config: offsiteJob, TimeZone: "Europe/Istanbul"},
+		{ID: "job-bad-tz", Config: offsiteJob, TimeZone: "Mars/Olympus"},
 		{ID: "job-bad-file", Config: strings.Replace(jobYAML, "password_env: UNTH_SECRET_DB", "password_file: /etc/shadow", 1)},
 		{ID: "job-bad-key", Config: offsiteJob + "encryption:\n  identity_file: /tmp/attacker.key\n"},
 		{ID: "job-bad-secret", Config: jobYAML},
@@ -134,6 +135,9 @@ func TestManagedJobRun(t *testing.T) {
 	if os.Getenv("UNTH_SECRET_DB") != "" {
 		t.Fatal("secret left in the environment after the run")
 	}
+	if seenCfg.Offsite.TimeZone != "Europe/Istanbul" {
+		t.Fatalf("time zone from the control plane not applied: %q", seenCfg.Offsite.TimeZone)
+	}
 	if seenCfg.Encryption.IdentityFile != filepath.Join(Dir(a.DataDir), "age.key") || seenCfg.Signing.KeyFile == "" {
 		t.Fatalf("offsite job does not use the agent's own keys: %+v", seenCfg.Encryption)
 	}
@@ -142,7 +146,7 @@ func TestManagedJobRun(t *testing.T) {
 		got[e.Type+":"+e.JobID+e.CommandID]++
 	}
 	for _, want := range []string{"run.completed:job-shopc1", "verify.completed:c2", "command.rejected:c3", "run.completed:job-filesc4",
-		"job.rejected:job-bad-file", "job.rejected:job-bad-key", "job.rejected:job-bad-secret"} {
+		"job.rejected:job-bad-file", "job.rejected:job-bad-key", "job.rejected:job-bad-secret", "job.rejected:job-bad-tz"} {
 		if got[want] != 1 {
 			t.Errorf("event %s: %d (all: %v)", want, got[want], got)
 		}

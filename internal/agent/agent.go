@@ -256,6 +256,9 @@ func (a *Agent) jobPolicy(j agentproto.Job) (*config.Config, error) {
 	case cfg.Offsite.RcloneBinary != "" || cfg.Offsite.RcloneConfig != "":
 		return nil, errors.New("rclone_binary/rclone_config are not allowed in managed jobs")
 	}
+	if j.TimeZone != "" && cfg.Offsite.TimeZone == "" {
+		cfg.Offsite.TimeZone = j.TimeZone // checked by Validate below
+	}
 	dir := Dir(a.DataDir)
 	if cfg.Offsite.Enabled() {
 		cfg.Encryption.IdentityFile = filepath.Join(dir, offsite.AgeKeyFile)

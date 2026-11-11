@@ -116,6 +116,9 @@ type Job struct {
 	Config   string            `json:"config"`
 	Secrets  map[string]string `json:"secrets"` // env name -> age-encrypted (armored) value
 	Disabled bool              `json:"disabled"`
+	// TimeZone (IANA, e.g. Europe/Istanbul) names dated offsite copy folders
+	// when the job file sets no offsite.time_zone. Older agents ignore it.
+	TimeZone string `json:"time_zone,omitempty"`
 }
 
 // JobsResponse is the agent's complete job set.
