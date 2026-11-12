@@ -29,7 +29,7 @@
 name: unthrecover
 
 x-unth: &unth
-  image: ${UNTH_IMAGE:-ghcr.io/unmadethings/unthrecover:v0.4.0-beta}
+  image: ${UNTH_IMAGE:-ghcr.io/unmadethings/unthrecover:v0.5.0-beta}
   restart: unless-stopped
   env_file: .env
   environment:

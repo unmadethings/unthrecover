@@ -5,6 +5,8 @@ versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0-beta] — 2026-11-12 — dated copy folders, Drive folder picker, Drive from the cloud
+
 ### Changed
 - Offsite copies are stored in readable dated folders, by month:
   `<prefix>/<job>/2026-11/2026-11-11 17.30/` (`-2`, `-3` for backups in the same minute),
@@ -24,6 +26,8 @@ versioning: [SemVer](https://semver.org/).
   access tokens for its folder (`POST /api/agent/v1/drive-token`); copies are encrypted with
   the agent's own key as before.
 - `pkg/fakegoogle`: the fake of Google's OAuth and Drive APIs is importable for tests.
+- Agent protocol: `Job.time_zone` from the control plane names dated folders (older agents
+  ignore it).
 
 ## [0.4.0-beta] — 2026-11-11 — Google Drive, Unth Recover Cloud agent, security fix
 
