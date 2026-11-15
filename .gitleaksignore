@@ -1,0 +1,3 @@
+# Test fixture, not a credential: a made-up access token string in an agent
+# unit test (replaced in a later commit; kept here because history is scanned).
+a06676e3854766c7db21b893ee8a1b3fd419c7c3:internal/agent/agent_test.go:generic-api-key:79

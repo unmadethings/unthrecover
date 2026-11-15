@@ -76,7 +76,7 @@ func TestEnrollment(t *testing.T) {
 func TestManagedJobRun(t *testing.T) {
 	fc := fakecloud.New()
 	defer fc.Close()
-	fc.Drive = map[string]agentproto.DriveTokenResponse{"gdrive": {AccessToken: "ya29.short-lived", ExpiresAt: time.Now().Add(time.Hour),
+	fc.Drive = map[string]agentproto.DriveTokenResponse{"gdrive": {AccessToken: "fake-access-token", ExpiresAt: time.Now().Add(time.Hour),
 		Account: "ops@example.com", FolderID: "folder-1", FolderName: "Backups"}}
 	var secrets []string
 	var cfgs []*config.Config
@@ -129,7 +129,7 @@ func TestManagedJobRun(t *testing.T) {
 	}
 	seenCfg := cfgs[1]
 	// Only the Drive job gets the control plane's Drive broker.
-	if len(brokered) != 1 || brokered[0].AccessToken != "ya29.short-lived" || brokered[0].FolderID != "folder-1" {
+	if len(brokered) != 1 || brokered[0].AccessToken != "fake-access-token" || brokered[0].FolderID != "folder-1" {
 		t.Fatalf("brokered drive tokens: %+v", brokered)
 	}
 	if os.Getenv("UNTH_SECRET_DB") != "" {
