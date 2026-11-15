@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver (no cgo)
@@ -59,13 +60,8 @@ func Open(ctx context.Context, dataDir string) (*Store, error) {
 		return nil, fmt.Errorf("%w: metadata database is a symbolic link", security.ErrUnsafePath)
 	}
 	dsn := "file:" + path + "?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=synchronous(FULL)"
-	db, err := sql.Open("sqlite", dsn)
+	db, err := openDB(ctx, dsn)
 	if err != nil {
-		return nil, err
-	}
-	db.SetMaxOpenConns(1)
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
 		return nil, fmt.Errorf("open metadata db: %w", err)
 	}
 	_ = os.Chmod(path, 0o600)
@@ -75,6 +71,43 @@ func Open(ctx context.Context, dataDir string) (*Store, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// openDB connects and applies the pragmas. Switching a brand-new database to
+// WAL needs a short exclusive lock and SQLite reports SQLITE_BUSY at once
+// for it, without waiting busy_timeout, when another process opens the same
+// new file at that moment (Compose: scheduler + panel). Retry that case.
+func openDB(ctx context.Context, dsn string) (*sql.DB, error) {
+	deadline := time.Now().Add(15 * time.Second)
+	for attempt := 0; ; attempt++ {
+		db, err := sql.Open("sqlite", dsn)
+		if err != nil {
+			return nil, err
+		}
+		db.SetMaxOpenConns(1)
+		err = db.PingContext(ctx)
+		if err == nil {
+			return db, nil
+		}
+		_ = db.Close()
+		if !isBusy(err) || time.Now().After(deadline) {
+			return nil, err
+		}
+		wait := time.Duration(10+attempt*10) * time.Millisecond
+		if wait > 200*time.Millisecond {
+			wait = 200 * time.Millisecond
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(wait):
+		}
+	}
+}
+
+func isBusy(err error) bool {
+	m := err.Error()
+	return strings.Contains(m, "SQLITE_BUSY") || strings.Contains(m, "database is locked")
 }
 
 // Close closes the database.
