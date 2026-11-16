@@ -5,6 +5,16 @@ versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1-beta] — 2026-11-16 — Google sign-in built in
+
+### Changed
+- Release binaries embed the project's Google OAuth client and the folder picker key, so
+  "Connect Google Drive" and "Choose folder…" work without setting `UNTH_GOOGLE_*` yourself.
+
+### Fixed
+- Opening a new data directory from several processes at once could fail with "database is
+  locked" (SQLite WAL switch); it is retried now.
+
 ## [0.5.0-beta] — 2026-11-12 — dated copy folders, Drive folder picker, Drive from the cloud
 
 ### Changed
