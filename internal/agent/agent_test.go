@@ -208,3 +208,48 @@ func TestLocalSchedule(t *testing.T) {
 		t.Fatalf("%v", ids)
 	}
 }
+
+func TestDiscoveryAndUpdateRequests(t *testing.T) {
+	fc := fakecloud.New()
+	defer fc.Close()
+	found := []agentproto.FoundDatabase{{Container: "coolify-db-abc", Platform: "coolify", Name: "shop", Database: "shop",
+		User: "postgres", Image: "postgres:16", Running: true, HasPassword: true}}
+	calls := 0
+	a, id := enrolled(t, fc, Hooks{Discover: func(context.Context) []agentproto.FoundDatabase { calls++; return found }})
+	fc.Command(id, agentproto.Command{ID: "u1", Type: agentproto.CmdUpdate, Version: "v0.6.0-beta"})
+	fc.Command(id, agentproto.Command{ID: "u2", Type: agentproto.CmdUpdate, Version: "v0.6.0; rm -rf /"})
+	fc.Command(id, agentproto.Command{ID: "u3", Type: agentproto.CmdUpdate, Version: "https://evil.example/unth"})
+	if err := a.Run(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	hb := fc.Agents()[0].LastHeartbeat
+	if len(hb.Databases) != 1 || hb.Databases[0].Container != "coolify-db-abc" || !hb.Databases[0].HasPassword {
+		t.Fatalf("databases in heartbeat: %+v", hb.Databases)
+	}
+	req, err := os.ReadFile(filepath.Join(Dir(a.DataDir), UpdateRequestFile))
+	if err != nil || string(req) != "v0.6.0-beta\n" {
+		t.Fatalf("update request %q %v", req, err)
+	}
+	got := map[string]int{}
+	for _, e := range fc.TakeEvents() {
+		got[e.Type+":"+e.CommandID]++
+	}
+	if got["update.requested:u1"] != 1 || got["command.rejected:u2"] != 1 || got["command.rejected:u3"] != 1 {
+		t.Fatalf("events %v", got)
+	}
+	// The helper's result is reported once, then removed.
+	res := filepath.Join(Dir(a.DataDir), UpdateResultFile)
+	_ = os.WriteFile(res, []byte(`{"version":"v0.6.0-beta","ok":true,"finished":"2026-11-16T09:00:00Z"}`), 0o600)
+	if err := a.Run(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	if u := fc.Agents()[0].LastHeartbeat.Update; u == nil || !u.OK || u.Version != "v0.6.0-beta" {
+		t.Fatalf("update result %+v", u)
+	}
+	if _, err := os.Stat(res); !os.IsNotExist(err) {
+		t.Fatal("result not removed")
+	}
+	if calls != 1 {
+		t.Fatalf("discovery should be cached between heartbeats, ran %d times", calls)
+	}
+}

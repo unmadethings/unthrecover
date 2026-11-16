@@ -22,6 +22,9 @@ sed 's#/usr/local/bin/unth#/usr/bin/unth#' deployments/systemd/unth@.service > "
 install -m 0644 deployments/systemd/unth@.timer "$ROOT/lib/systemd/system/unth@.timer"
 sed 's#/usr/local/bin/unth#/usr/bin/unth#' deployments/systemd/unth-agent.service > "$ROOT/lib/systemd/system/unth-agent.service"
 chmod 0644 "$ROOT/lib/systemd/system/unth-agent.service"
+sed 's#/usr/local/bin/unth#/usr/bin/unth#' deployments/systemd/unth-update.service > "$ROOT/lib/systemd/system/unth-update.service"
+install -m 0644 deployments/systemd/unth-update.path "$ROOT/lib/systemd/system/unth-update.path"
+chmod 0644 "$ROOT/lib/systemd/system/unth-update.service"
 chmod 0644 "$ROOT/lib/systemd/system/unth@.service"
 install -m 0644 examples/backup.yaml examples/volume.yaml "$ROOT/usr/share/doc/unthrecover/examples/"
 install -m 0644 deployments/cron/unthrecover.cron "$ROOT/usr/share/doc/unthrecover/examples/"
@@ -57,7 +60,11 @@ if [ "$1" = "configure" ]; then
   if getent group docker >/dev/null; then
     usermod -aG docker unth || true
   fi
-  if [ -d /run/systemd/system ]; then systemctl daemon-reload || true; fi
+  if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+    # Lets Unth Recover Cloud's "Update" button install newer official releases.
+    systemctl enable --now unth-update.path >/dev/null 2>&1 || true
+  fi
   echo "unthrecover: put job configs in /etc/unth/jobs/<job>.yaml (secrets in <job>.env, 0600),"
   echo "             then: systemctl enable --now unth@<job>.timer   (see /usr/share/doc/unthrecover)"
 fi

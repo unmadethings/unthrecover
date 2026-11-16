@@ -1,0 +1,12 @@
+# Starts unth-update.service when the agent asks for an update (it can only
+# write a version number; the root helper installs only newer official,
+# checksum-verified releases).
+[Unit]
+Description=Unth Recover update requests from the agent
+
+[Path]
+PathChanged=/var/lib/unthrecover/agent/update-request
+Unit=unth-update.service
+
+[Install]
+WantedBy=multi-user.target

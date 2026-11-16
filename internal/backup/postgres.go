@@ -24,6 +24,7 @@ import (
 
 	"github.com/unmadethings/unthrecover/internal/buildinfo"
 	"github.com/unmadethings/unthrecover/internal/config"
+	"github.com/unmadethings/unthrecover/internal/discovery"
 	"github.com/unmadethings/unthrecover/internal/docker"
 	"github.com/unmadethings/unthrecover/internal/failure"
 	"github.com/unmadethings/unthrecover/internal/manifest"
@@ -71,6 +72,11 @@ func (c *countingHashWriter) Write(p []byte) (int, error) {
 
 // RunPostgres executes a PostgreSQL logical backup described by cfg.
 func (e *Engine) RunPostgres(ctx context.Context, cfg *config.Config) (*metadata.Backup, error) {
+	if cfg.Source.Container != "" {
+		if err := e.useContainer(ctx, cfg); err != nil {
+			return nil, err
+		}
+	}
 	src := cfg.Source
 	srcJSON, _ := json.Marshal(src.Redacted())
 	b := &metadata.Backup{
@@ -118,6 +124,33 @@ func (e *Engine) RunPostgres(ctx context.Context, cfg *config.Config) (*metadata
 	}
 	e.audit(cctx, "backup.finish", b.ID, "success", fmt.Sprintf("size=%d sha256=%s", b.SizeBytes, b.SHA256))
 	return b, nil
+}
+
+// useContainer reads address, database, user and password of
+// source.container from Docker for this run; the restore test uses the same
+// image (same extensions) unless one is set.
+func (e *Engine) useContainer(ctx context.Context, cfg *config.Config) error {
+	if e.Docker == nil {
+		return failure.New(failure.DockerUnavailable, "source.container needs Docker", nil)
+	}
+	dc, err := e.Docker()
+	if err != nil {
+		return failure.New(failure.DockerUnavailable, "docker", err)
+	}
+	db, err := discovery.ResolveContainer(ctx, dc, cfg.Source.Container)
+	if errors.Is(err, discovery.ErrNoPassword) {
+		return failure.New(failure.ConfigInvalid, "source.container", err)
+	}
+	if err != nil {
+		return failure.New(failure.SourceNotFound, "source.container", err).
+			WithHint("check that the database container is running on this server (docker ps)")
+	}
+	e.Redactor.Add(db.Password)
+	cfg.Source.UseContainer(db.Host, db.Database, db.User, db.Password)
+	if cfg.Verification.RestoreImage == "" && config.ValidImage(db.Image) {
+		cfg.Verification.RestoreImage = db.Image
+	}
+	return nil
 }
 
 func (e *Engine) run(ctx context.Context, cfg *config.Config, b *metadata.Backup, tmpPath string, finalDir *string) error {

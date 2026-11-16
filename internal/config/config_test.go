@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -142,5 +143,32 @@ notifications:
 	}
 	if (Retention{}).Enabled() {
 		t.Fatal("empty retention enabled")
+	}
+}
+
+func TestContainerSource(t *testing.T) {
+	base := "version: 1\nsource:\n  name: shop\n  container: coolify-db-abc\n"
+	c, err := Parse([]byte(base))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pw, _ := c.Source.ResolvePassword(); pw != "" {
+		t.Fatal("password before resolution")
+	}
+	c.Source.UseContainer("172.18.0.5", "shop", "app", "s3cret")
+	if pw, _ := c.Source.ResolvePassword(); pw != "s3cret" || c.Source.Host != "172.18.0.5" || c.Source.User != "app" {
+		t.Fatalf("resolved %+v %q", c.Source, pw)
+	}
+	if r := c.Source.Redacted(); r["container"] != "coolify-db-abc" || strings.Contains(fmt.Sprint(r), "s3cret") {
+		t.Fatalf("redacted %v", r)
+	}
+	for name, raw := range map[string]string{
+		"with host":     base + "  host: db\n",
+		"with password": base + "  password_env: PW\n",
+		"bad name":      "version: 1\nsource:\n  name: shop\n  container: \"../x\"\n",
+	} {
+		if _, err := Parse([]byte(raw)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }

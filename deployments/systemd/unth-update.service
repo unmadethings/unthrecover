@@ -1,0 +1,16 @@
+# Installs a newer official release of unth when the agent asks for one
+# (Unth Recover Cloud → Servers → Update). Root is needed to install the
+# package; the request file can only name a version.
+[Unit]
+Description=Unth Recover self-update
+Documentation=https://github.com/unmadethings/unthrecover/blob/main/docs/AGENT.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/unth self-update --request-dir /var/lib/unthrecover/agent
+TimeoutStartSec=20min
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectHome=yes

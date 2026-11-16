@@ -29,6 +29,8 @@ type Candidate struct {
 	Labels   map[string]string
 	Env      map[string]string
 	Networks []string
+	// HasPassword: POSTGRES_PASSWORD is set (its value is never kept).
+	HasPassword bool
 }
 
 // JobSuggestion is a ready-to-review job configuration for one database.
@@ -45,6 +47,9 @@ type JobSuggestion struct {
 	Network      string   `json:"network,omitempty"`
 	Notes        []string `json:"notes,omitempty"`
 	YAML         string   `json:"yaml"`
+	Image        string   `json:"image,omitempty"`
+	Running      bool     `json:"running"`
+	HasPassword  bool     `json:"has_password"`
 }
 
 var (
@@ -80,7 +85,11 @@ func DetectPlatform(labels map[string]string, networks []string) string {
 // Suggest derives a job for a PostgreSQL container. It is pure.
 func Suggest(c Candidate) JobSuggestion {
 	plat := DetectPlatform(c.Labels, c.Networks)
-	s := JobSuggestion{Container: c.Name, Platform: plat, Database: "postgres", User: "postgres"}
+	s := JobSuggestion{Container: c.Name, Platform: plat, Database: "postgres", User: "postgres",
+		Running: c.State == "running", HasPassword: c.HasPassword}
+	if imageRef.MatchString(strings.ToLower(c.Image)) {
+		s.Image = strings.ToLower(c.Image)
+	}
 	if v := c.Env["POSTGRES_DB"]; safeDBIdent.MatchString(v) {
 		s.Database = v
 	}
@@ -221,6 +230,9 @@ func SuggestJobs(ctx context.Context, dc *docker.Client) ([]JobSuggestion, error
 			k, v, _ := strings.Cut(kv, "=")
 			if k == "POSTGRES_DB" || k == "POSTGRES_USER" { // only non-secret settings are kept
 				cand.Env[k] = v
+			}
+			if k == "POSTGRES_PASSWORD" && v != "" {
+				cand.HasPassword = true // presence only
 			}
 		}
 		for n := range info.NetworkSettings.Networks {

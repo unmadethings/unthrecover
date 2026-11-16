@@ -83,6 +83,31 @@ type Heartbeat struct {
 	Docker      string         `json:"docker"`       // engine version or "unreachable"
 	FreeBytes   int64          `json:"free_bytes"`
 	Stats       map[string]int `json:"stats,omitempty"`
+	// Databases found on this server (PostgreSQL containers). Never secrets:
+	// HasPassword only says whether the container defines POSTGRES_PASSWORD.
+	Databases []FoundDatabase `json:"databases,omitempty"`
+	// Update is the outcome of the last self-update, if any.
+	Update *UpdateResult `json:"update,omitempty"`
+}
+
+// FoundDatabase is a PostgreSQL container the agent found.
+type FoundDatabase struct {
+	Container   string `json:"container"`
+	Platform    string `json:"platform"` // coolify | dokploy | compose | docker
+	Name        string `json:"name"`     // suggested job/workload name
+	Database    string `json:"database"`
+	User        string `json:"user"`
+	Image       string `json:"image"`
+	Running     bool   `json:"running"`
+	HasPassword bool   `json:"has_password"`
+}
+
+// UpdateResult is written by the root update helper and reported once.
+type UpdateResult struct {
+	Version  string    `json:"version"`
+	OK       bool      `json:"ok"`
+	Error    string    `json:"error,omitempty"`
+	Finished time.Time `json:"finished"`
 }
 
 // HeartbeatResponse carries commands for the agent.
@@ -97,6 +122,9 @@ const (
 	CmdRunJob = "run_job"   // run one job now (backup, verify, offsite, prune)
 	CmdVerify = "verify"    // verify an existing backup now
 	CmdSync   = "sync_jobs" // fetch the job set now
+	// CmdUpdate asks the agent to update unth to Version (an official
+	// release; the root helper unth-update verifies and installs it).
+	CmdUpdate = "update"
 )
 
 // Command is an instruction from the control plane.
@@ -105,6 +133,7 @@ type Command struct {
 	Type     string `json:"type"`
 	JobID    string `json:"job_id,omitempty"`
 	BackupID string `json:"backup_id,omitempty"`
+	Version  string `json:"version,omitempty"` // CmdUpdate
 }
 
 // Job is a job managed in the control plane. Config is the job YAML; it must
@@ -133,6 +162,7 @@ const (
 	EvVerifyCompleted = "verify.completed"
 	EvCommandRejected = "command.rejected"
 	EvJobRejected     = "job.rejected"
+	EvUpdateRequested = "update.requested"
 )
 
 // Event reports a result. Summary holds only metadata (see package doc).

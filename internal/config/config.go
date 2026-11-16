@@ -103,6 +103,13 @@ type Source struct {
 	PasswordFile   string   `yaml:"password_file"`
 	SSLMode        string   `yaml:"sslmode"`
 	ConnectTimeout Duration `yaml:"connect_timeout"`
+	// Container names a PostgreSQL container on this server instead of
+	// host/password: at every run unth reads its address, POSTGRES_USER,
+	// POSTGRES_DB and POSTGRES_PASSWORD from Docker. The password stays in
+	// memory on this server only.
+	Container string `yaml:"container"`
+	// resolved from Container for one run (never persisted)
+	containerPassword string
 
 	// type: docker-volume
 	Volume      string   `yaml:"volume"`
@@ -158,6 +165,8 @@ var (
 	envPattern  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	// volumePattern matches Docker's volume name rules.
 	volumePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,254}$`)
+	// containerPattern: Docker container names (also Swarm task names).
+	containerPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,254}$`)
 	// imagePattern is intentionally conservative: registry/repo:tag or @digest.
 	imagePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._/:-]*(@sha256:[a-f0-9]{64})?$`)
 	validSSL     = map[string]bool{"disable": true, "allow": true, "prefer": true, "require": true, "verify-ca": true, "verify-full": true}
@@ -362,6 +371,21 @@ func (c *Config) Validate() error {
 }
 
 func validatePostgresSource(s Source, add func(string, ...any)) {
+	if s.Container != "" {
+		if !containerPattern.MatchString(s.Container) {
+			add("source.container: invalid container name")
+		}
+		if s.Host != "" || s.PasswordEnv != "" || s.PasswordFile != "" {
+			add("source: container replaces host and password_env/password_file (they are read from the container)")
+		}
+		if (s.Database != "" && strings.ContainsAny(s.Database, "\x00\n")) || (s.User != "" && strings.ContainsAny(s.User, "\x00\n")) {
+			add("source.database/user: invalid")
+		}
+		if !validSSL[s.SSLMode] {
+			add("source.sslmode: invalid value %q", s.SSLMode)
+		}
+		return
+	}
 	if s.Host == "" || strings.ContainsAny(s.Host, " \t\n/") && !strings.HasPrefix(s.Host, "/") {
 		add("source.host: required")
 	}
@@ -438,6 +462,8 @@ func (v *Verification) Validate() error {
 // (e.g. trust/peer authentication or a user-managed ~/.pgpass).
 func (s *Source) ResolvePassword() (string, error) {
 	switch {
+	case s.Container != "":
+		return s.containerPassword, nil
 	case s.PasswordEnv != "":
 		v, ok := os.LookupEnv(s.PasswordEnv)
 		if !ok {
@@ -451,13 +477,27 @@ func (s *Source) ResolvePassword() (string, error) {
 	}
 }
 
+// ValidImage reports whether s is an acceptable image reference.
+func ValidImage(s string) bool { return imagePattern.MatchString(s) }
+
+// UseContainer fills in what was read from source.container for this run.
+func (s *Source) UseContainer(host, database, user, password string) {
+	s.Host, s.containerPassword = host, password
+	if s.Database == "" {
+		s.Database = database
+	}
+	if s.User == "" {
+		s.User = user
+	}
+}
+
 // Redacted returns a copy of the source safe to persist (no secret values;
 // only the name of the secret source is kept).
 func (s Source) Redacted() map[string]any {
 	return map[string]any{
 		"name": s.Name, "type": s.Type, "host": s.Host, "port": s.Port,
 		"database": s.Database, "user": s.User, "sslmode": s.SSLMode,
-		"password_env": s.PasswordEnv, "password_file": s.PasswordFile,
+		"password_env": s.PasswordEnv, "password_file": s.PasswordFile, "container": s.Container,
 		"volume": s.Volume, "consistency": s.Consistency,
 	}
 }

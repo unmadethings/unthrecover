@@ -93,7 +93,7 @@ Your backup is not your recovery.`,
 	root.SetOut(out)
 	root.SetErr(errOut)
 
-	root.AddCommand(newVersionCmd(app), newDoctorCmd(app), newDiscoverCmd(app), newBackupCmd(app),
+	root.AddCommand(newSelfUpdateCmd(app), newVersionCmd(app), newDoctorCmd(app), newDiscoverCmd(app), newBackupCmd(app),
 		newVerifyCmd(app), newReportCmd(app), newCleanupCmd(app), newAuditCmd(app), newRunCmd(app), newPruneCmd(app), newServeCmd(app), newScheduleCmd(app), newKeysCmd(app), newOffsiteCmd(app), newAgentCmd(app))
 	return root, app
 }

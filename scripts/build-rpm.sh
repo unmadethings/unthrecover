@@ -18,6 +18,7 @@ STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 sed 's#/usr/local/bin/unth#/usr/bin/unth#' deployments/systemd/unth@.service > "$STAGE/unth@.service"
 sed 's#/usr/local/bin/unth#/usr/bin/unth#' deployments/systemd/unth-agent.service > "$STAGE/unth-agent.service"
+sed 's#/usr/local/bin/unth#/usr/bin/unth#' deployments/systemd/unth-update.service > "$STAGE/unth-update.service"
 
 # The user exists before files are laid down, so /etc/unth/jobs is owned by
 # group unth in the package itself (rpm -V stays clean).
@@ -76,6 +77,12 @@ contents:
     file_info: {mode: 0644}
   - src: ${STAGE}/unth-agent.service
     dst: /usr/lib/systemd/system/unth-agent.service
+    file_info: {mode: 0644}
+  - src: ${STAGE}/unth-update.service
+    dst: /usr/lib/systemd/system/unth-update.service
+    file_info: {mode: 0644}
+  - src: ${PWD}/deployments/systemd/unth-update.path
+    dst: /usr/lib/systemd/system/unth-update.path
     file_info: {mode: 0644}
   - src: ${PWD}/deployments/systemd/unth@.timer
     dst: /usr/lib/systemd/system/unth@.timer

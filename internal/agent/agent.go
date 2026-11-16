@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -188,7 +189,19 @@ type Hooks struct {
 	Verify func(ctx context.Context, backupID string) map[string]any
 	// Status returns docker version and free bytes for the heartbeat.
 	Status func(ctx context.Context) (docker string, free int64)
+	// Discover lists the PostgreSQL containers on this server (no secrets).
+	Discover func(ctx context.Context) []agentproto.FoundDatabase
 }
+
+// UpdateRequestFile and UpdateResultFile (in the agent dir) are the only
+// link to the root helper unth-update: the agent may only ask for a version;
+// the helper installs it if it is a newer official release.
+const (
+	UpdateRequestFile = "update-request"
+	UpdateResultFile  = "update-result.json"
+)
+
+var versionPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$`)
 
 // Agent is the running agent.
 type Agent struct {
@@ -201,13 +214,16 @@ type Agent struct {
 	// Secrets registers values to redact from logs (e.g. Drive access tokens).
 	Secrets func(...string)
 
-	mu       sync.Mutex
-	jobs     agentproto.JobsResponse
-	next     map[string]time.Time
-	queue    []work
-	running  map[string]bool
-	events   []agentproto.Event
-	interval time.Duration
+	mu      sync.Mutex
+	jobs    agentproto.JobsResponse
+	next    map[string]time.Time
+	queue   []work
+	running map[string]bool
+
+	discovered   []agentproto.FoundDatabase
+	discoveredAt time.Time
+	events       []agentproto.Event
+	interval     time.Duration
 }
 
 type work struct {
@@ -361,6 +377,8 @@ func (a *Agent) heartbeat(ctx context.Context) error {
 	if a.Hooks.Status != nil {
 		hb.Docker, hb.FreeBytes = a.Hooks.Status(ctx)
 	}
+	hb.Databases = a.databases(ctx)
+	hb.Update = a.updateResult()
 	a.mu.Lock()
 	hb.JobsVersion = a.jobs.Version
 	for id := range a.running {
@@ -387,11 +405,64 @@ func (a *Agent) heartbeat(ctx context.Context) error {
 			a.enqueue(work{cmdID: c.ID, jobID: c.JobID})
 		case c.Type == agentproto.CmdVerify && idOK(c.BackupID):
 			a.enqueue(work{cmdID: c.ID, backupID: c.BackupID})
+		case c.Type == agentproto.CmdUpdate && versionPattern.MatchString(c.Version):
+			a.requestUpdate(c)
 		default:
 			a.addEvent(agentproto.Event{Type: agentproto.EvCommandRejected, CommandID: c.ID, Summary: map[string]any{"error": "unknown or invalid command"}})
 		}
 	}
 	return a.flush(ctx)
+}
+
+// databases runs discovery at most every 2 minutes.
+func (a *Agent) databases(ctx context.Context) []agentproto.FoundDatabase {
+	if a.Hooks.Discover == nil {
+		return nil
+	}
+	a.mu.Lock()
+	if time.Since(a.discoveredAt) < 2*time.Minute {
+		dbs := a.discovered
+		a.mu.Unlock()
+		return dbs
+	}
+	a.mu.Unlock()
+	dctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	dbs := a.Hooks.Discover(dctx)
+	a.mu.Lock()
+	a.discovered, a.discoveredAt = dbs, time.Now()
+	a.mu.Unlock()
+	return dbs
+}
+
+// requestUpdate hands the version to the root helper (unth-update.path
+// watches the request file).
+func (a *Agent) requestUpdate(c agentproto.Command) {
+	p := filepath.Join(Dir(a.DataDir), UpdateRequestFile)
+	err := os.WriteFile(p+".tmp", []byte(c.Version+"\n"), 0o600)
+	if err == nil {
+		err = os.Rename(p+".tmp", p)
+	}
+	sum := map[string]any{"version": c.Version}
+	if err != nil {
+		sum["error"] = err.Error()
+	}
+	a.addEvent(agentproto.Event{Type: agentproto.EvUpdateRequested, CommandID: c.ID, Summary: sum})
+}
+
+// updateResult reports the helper's last outcome once, then removes it.
+func (a *Agent) updateResult() *agentproto.UpdateResult {
+	p := filepath.Join(Dir(a.DataDir), UpdateResultFile)
+	raw, err := os.ReadFile(p) // #nosec G304 -- fixed path in the agent dir
+	if err != nil || len(raw) > 4096 {
+		return nil
+	}
+	var r agentproto.UpdateResult
+	if json.Unmarshal(raw, &r) != nil {
+		return nil
+	}
+	_ = os.Remove(p)
+	return &r
 }
 
 func (a *Agent) flush(ctx context.Context) error {

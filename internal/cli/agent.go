@@ -13,9 +13,11 @@ import (
 
 	"github.com/unmadethings/unthrecover/internal/agent"
 	"github.com/unmadethings/unthrecover/internal/config"
+	"github.com/unmadethings/unthrecover/internal/discovery"
 	"github.com/unmadethings/unthrecover/internal/repo"
 	"github.com/unmadethings/unthrecover/internal/runner"
 	"github.com/unmadethings/unthrecover/internal/verify"
+	"github.com/unmadethings/unthrecover/pkg/agentproto"
 )
 
 func newAgentCmd(app *App) *cobra.Command {
@@ -151,6 +153,25 @@ func agentHooks(app *App) agent.Hooks {
 				return "unreachable", free
 			}
 			return "Engine " + v.Version, free
+		},
+		Discover: func(ctx context.Context) []agentproto.FoundDatabase {
+			dc, err := dockerClient()
+			if err != nil {
+				return nil
+			}
+			js, err := discovery.SuggestJobs(ctx, dc)
+			if err != nil {
+				return nil
+			}
+			out := make([]agentproto.FoundDatabase, 0, len(js))
+			for _, j := range js {
+				out = append(out, agentproto.FoundDatabase{Container: j.Container, Platform: j.Platform, Name: j.Workload,
+					Database: j.Database, User: j.User, Image: j.Image, Running: j.Running, HasPassword: j.HasPassword})
+				if len(out) == 50 {
+					break
+				}
+			}
+			return out
 		},
 	}
 }
