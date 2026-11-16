@@ -5,7 +5,17 @@ versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.5.1-beta] — 2026-11-16 — Google sign-in built in
+## [0.6.0-beta] — 2026-11-16 — one-click backups from Unth Recover Cloud
+
+### Added
+- `source.container`: a job can name a PostgreSQL container on this server instead of host and
+  password. unth reads its address, `POSTGRES_USER`, `POSTGRES_DB` and `POSTGRES_PASSWORD` from
+  Docker at every run; the password stays in memory on the server. The restore test uses the
+  container's image unless one is set.
+- Agent: reports the PostgreSQL containers it finds (never passwords) so the cloud can offer
+  "Back up now"; accepts "update" requests from the cloud.
+- `unth self-update` and `unth-update.path`/`unth-update.service` (in the .deb/.rpm): install a
+  newer official release (checksum-verified; never older or equal) when the agent asks for it.
 
 ### Changed
 - Release binaries embed the project's Google OAuth client and the folder picker key, so
